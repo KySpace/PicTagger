@@ -9,17 +9,22 @@ pub fn DetailsPanel(
     on_delete: Callback<()>,
 ) -> impl IntoView {
     let show_preview_modal = RwSignal::new(false);
+    let has_selected = move || selected.get().is_some();
 
     view! {
         <aside class="details-panel">
             <h2>"Details"</h2>
-            {move || match selected.get() {
-                Some(item) => {
-                    let preview_src = item.image_data.clone();
+            {move || {
+                if has_selected() {
                     view! {
                         <div class="details-content">
                             <img
-                                src=item.image_data.clone()
+                                src=move || {
+                                    selected
+                                        .get()
+                                        .map(|item| item.image_data)
+                                        .unwrap_or_default()
+                                }
                                 alt="selected preview"
                                 title="Double click to enlarge"
                                 on:dblclick=move |_| show_preview_modal.set(true)
@@ -28,7 +33,9 @@ pub fn DetailsPanel(
                                 "Source"
                                 <input
                                     type="text"
-                                    prop:value=item.source
+                                    prop:value=move || {
+                                        selected.get().map(|item| item.source).unwrap_or_default()
+                                    }
                                     on:input=move |ev| on_update.run(("source", event_target_value(&ev)))
                                 />
                             </label>
@@ -36,43 +43,65 @@ pub fn DetailsPanel(
                                 "Source Tag"
                                 <input
                                     type="text"
-                                    prop:value=item.source_tag
+                                    prop:value=move || {
+                                        selected.get().map(|item| item.source_tag).unwrap_or_default()
+                                    }
                                     on:input=move |ev| on_update.run(("source_tag", event_target_value(&ev)))
                                 />
                             </label>
                             <label>
                                 "IB"
                                 <input
-                                    type="number"
-                                    step="any"
-                                    prop:value=item.ib.to_string()
+                                    type="text"
+                                    inputmode="decimal"
+                                    prop:value=move || {
+                                        selected
+                                            .get()
+                                            .map(|item| item.ib.to_string())
+                                            .unwrap_or_default()
+                                    }
                                     on:input=move |ev| on_update.run(("ib", event_target_value(&ev)))
                                 />
                             </label>
                             <label>
                                 "Index"
                                 <input
-                                    type="number"
-                                    step="1"
-                                    prop:value=item.index.to_string()
+                                    type="text"
+                                    inputmode="numeric"
+                                    prop:value=move || {
+                                        selected
+                                            .get()
+                                            .map(|item| item.index.to_string())
+                                            .unwrap_or_default()
+                                    }
                                     on:input=move |ev| on_update.run(("index", event_target_value(&ev)))
                                 />
                             </label>
                             <label>
                                 "Frequency"
                                 <input
-                                    type="number"
-                                    step="any"
-                                    prop:value=item.frequency.to_string()
+                                    type="text"
+                                    inputmode="decimal"
+                                    prop:value=move || {
+                                        selected
+                                            .get()
+                                            .map(|item| item.frequency.to_string())
+                                            .unwrap_or_default()
+                                    }
                                     on:input=move |ev| on_update.run(("frequency", event_target_value(&ev)))
                                 />
                             </label>
                             <label>
                                 "Weight"
                                 <input
-                                    type="number"
-                                    step="any"
-                                    prop:value=item.weight.to_string()
+                                    type="text"
+                                    inputmode="decimal"
+                                    prop:value=move || {
+                                        selected
+                                            .get()
+                                            .map(|item| item.weight.to_string())
+                                            .unwrap_or_default()
+                                    }
                                     on:input=move |ev| on_update.run(("weight", event_target_value(&ev)))
                                 />
                             </label>
@@ -88,7 +117,15 @@ pub fn DetailsPanel(
                                         on:click=move |_| show_preview_modal.set(false)
                                     >
                                         <div class="image-preview-card" on:click=move |ev| ev.stop_propagation()>
-                                            <img src=preview_src.clone() alt="full preview" />
+                                            <img
+                                                src=move || {
+                                                    selected
+                                                        .get()
+                                                        .map(|item| item.image_data)
+                                                        .unwrap_or_default()
+                                                }
+                                                alt="full preview"
+                                            />
                                             <div class="modal-actions">
                                                 <button on:click=move |_| show_preview_modal.set(false)>"Close"</button>
                                             </div>
@@ -102,8 +139,7 @@ pub fn DetailsPanel(
                         }}
                     }
                         .into_any()
-                }
-                None => {
+                } else {
                     view! {
                         <div class="details-empty">
                             "Select an image from the gallery or scatter plot."
