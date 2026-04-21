@@ -120,6 +120,21 @@ input {
   padding: 0.8rem;
 }
 
+.top-tabs {
+  margin-top: 0.9rem;
+}
+
+.tab-header {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.tab-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .scatter-header h2 {
   margin: 0 0 0.6rem;
   font-size: 1rem;
@@ -195,12 +210,13 @@ input {
 }
 
 .dot {
-  fill: var(--accent);
-  opacity: 0.9;
+  stroke: transparent;
+  stroke-width: 0;
 }
 
 .dot.selected {
-  fill: #c66a00;
+  stroke: #c66a00;
+  stroke-width: 2;
 }
 
 .hover-card {
@@ -336,6 +352,65 @@ input {
   font-size: 0.9rem;
 }
 
+.tag-editor-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.tag-editor-panel h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.tag-editor-panel > p {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.tag-add-row {
+  display: grid;
+  grid-template-columns: 1fr 160px auto;
+  gap: 0.55rem;
+  align-items: end;
+  margin-bottom: 0.7rem;
+}
+
+.tag-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tag-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: grid;
+  grid-template-columns: 28px 1fr 1.2fr 48px auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tag-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid #c8d0c6;
+}
+
+.tag-name {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.hue-value {
+  text-align: right;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -404,5 +479,11 @@ input {
   }
   .details-panel {
     position: static;
+  }
+  .tag-add-row {
+    grid-template-columns: 1fr;
+  }
+  .tag-row {
+    grid-template-columns: 28px 1fr;
   }
 }

@@ -9,6 +9,8 @@ pub struct ImageRecord {
     pub source: String,
     #[serde(default)]
     pub source_tag: String,
+    #[serde(default)]
+    pub tag: String,
     pub index: i32,
     pub frequency: f64,
     pub weight: f64,
@@ -25,6 +27,7 @@ impl ImageRecord {
             ib: 0.0,
             source,
             source_tag: String::new(),
+            tag: String::new(),
             index: 0,
             frequency: 0.0,
             weight: 0.0,
@@ -32,6 +35,30 @@ impl ImageRecord {
             updated_at: ts,
         }
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct TagDefinition {
+    pub name: String,
+    pub hue: f64,
+}
+
+pub const MAX_TAGS: usize = 10;
+
+pub fn default_tag_definitions() -> Vec<TagDefinition> {
+    [15.0, 50.0, 85.0, 120.0, 155.0, 190.0, 225.0, 260.0, 295.0, 330.0]
+        .iter()
+        .enumerate()
+        .map(|(i, hue)| TagDefinition {
+            name: format!("tag{}", i + 1),
+            hue: *hue,
+        })
+        .collect()
+}
+
+pub fn oklch_from_hue(hue: f64) -> String {
+    let h = hue.rem_euclid(360.0);
+    format!("oklch(0.72 0.16 {h:.1})")
 }
 
 pub fn now_millis() -> i64 {

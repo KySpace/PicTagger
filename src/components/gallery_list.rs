@@ -34,7 +34,8 @@ pub fn GalleryList(
                                 <img src=item.image_data alt="gallery item" loading="lazy" />
                                 <div class="gallery-meta">
                                     <p class="source">{item.source.clone()}</p>
-                                    <p>{format!("tag: {}", item.source_tag)}</p>
+                                    <p>{format!("tag: {}", item.tag)}</p>
+                                    <p>{format!("source_tag: {}", item.source_tag)}</p>
                                     <p>{format!("IB: {:.3}  freq: {:.3}", item.ib, item.frequency)}</p>
                                     <p>{format!("index: {}  weight: {:.3}", item.index, item.weight)}</p>
                                 </div>

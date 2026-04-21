@@ -1,8 +1,9 @@
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::models::ImageRecord;
+use crate::models::{ImageRecord, TagDefinition, oklch_from_hue};
 
 const WIDTH: f64 = 900.0;
 const HEIGHT: f64 = 280.0;
@@ -52,6 +53,7 @@ fn parse_f64_opt(raw: &str) -> Option<f64> {
 #[component]
 pub fn ScatterPlot(
     images: Memo<Vec<ImageRecord>>,
+    tags: Memo<Vec<TagDefinition>>,
     selected_id: RwSignal<Option<Uuid>>,
     hover_id: RwSignal<Option<Uuid>>,
     on_select: Callback<Uuid>,
@@ -144,6 +146,13 @@ pub fn ScatterPlot(
         hover_id
             .get()
             .and_then(|id| images.get().into_iter().find(|x| x.id == id))
+    });
+
+    let tag_color_map = Memo::new(move |_| {
+        tags.get()
+            .into_iter()
+            .map(|t| (t.name, oklch_from_hue(t.hue)))
+            .collect::<HashMap<_, _>>()
     });
 
     let apply_axis_limits = move |_| {
@@ -319,13 +328,21 @@ pub fn ScatterPlot(
                             let ib = item.ib;
                             let freq = item.frequency;
                             let weight = item.weight;
+                            let item_tag = item.tag.clone();
                             let id = item.id;
                             view! {
                                 <circle
                                     cx=move || project_x(ib)
                                     cy=move || project_y(freq)
                                     r=5
-                                    style=move || format!("opacity: {:.3};", project_opacity(weight))
+                                    style=move || {
+                                        let fill = tag_color_map
+                                            .get()
+                                            .get(&item_tag)
+                                            .cloned()
+                                            .unwrap_or_else(|| "oklch(0.70 0.02 260)".to_string());
+                                        format!("opacity: {:.3}; fill: {};", project_opacity(weight), fill)
+                                    }
                                     class=move || {
                                         if selected_id.get() == Some(id) { "dot selected" } else { "dot" }
                                     }
@@ -354,6 +371,7 @@ pub fn ScatterPlot(
                         >
                             <img src=item.image_data alt="hover preview" />
                             <p>{item.source.clone()}</p>
+                            <p>{format!("tag: {}", item.tag)}</p>
                             <p>{format!("IB: {:.3}, freq: {:.3}", item.ib, item.frequency)}</p>
                             <div class="hover-actions">
                                 <button on:click=move |_| on_jump.run(id)>"Jump To List"</button>

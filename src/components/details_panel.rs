@@ -1,10 +1,11 @@
 use leptos::prelude::*;
 
-use crate::models::ImageRecord;
+use crate::models::{ImageRecord, TagDefinition};
 
 #[component]
 pub fn DetailsPanel(
     selected: Memo<Option<ImageRecord>>,
+    tags: Memo<Vec<TagDefinition>>,
     on_update: Callback<(&'static str, String)>,
     on_delete: Callback<()>,
 ) -> impl IntoView {
@@ -29,6 +30,24 @@ pub fn DetailsPanel(
                                 title="Double click to enlarge"
                                 on:dblclick=move |_| show_preview_modal.set(true)
                             />
+                            <label>
+                                "Tag"
+                                <input
+                                    type="text"
+                                    list="tag-options"
+                                    prop:value=move || {
+                                        selected.get().map(|item| item.tag).unwrap_or_default()
+                                    }
+                                    on:input=move |ev| on_update.run(("tag", event_target_value(&ev)))
+                                />
+                                <datalist id="tag-options">
+                                    <For
+                                        each=move || tags.get()
+                                        key=|t| t.name.clone()
+                                        children=move |t| view! { <option value=t.name></option> }
+                                    />
+                                </datalist>
+                            </label>
                             <label>
                                 "Source"
                                 <input

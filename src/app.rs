@@ -10,8 +10,9 @@ use crate::components::details_panel::DetailsPanel;
 use crate::components::filter_bar::IbFilterBar;
 use crate::components::gallery_list::GalleryList;
 use crate::components::scatter_plot::ScatterPlot;
-use crate::models::{ImageRecord, now_millis};
-use crate::storage::{clear_records, load_records, save_records};
+use crate::components::tag_editor::TagEditor;
+use crate::models::{ImageRecord, default_tag_definitions, now_millis};
+use crate::storage::{clear_records, load_records, load_tags, save_records, save_tags};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -88,6 +89,7 @@ fn process_upload_batch(
 #[component]
 pub fn App() -> impl IntoView {
     let images = RwSignal::new(load_records());
+    let tags = RwSignal::new(load_tags());
     let selected_id = RwSignal::new(None::<Uuid>);
     let filter_ib_min = RwSignal::new(None::<f64>);
     let filter_ib_max = RwSignal::new(None::<f64>);
@@ -97,9 +99,13 @@ pub fn App() -> impl IntoView {
     let show_delete_all_modal = RwSignal::new(false);
     let batch_source_tag = RwSignal::new(String::new());
     let batch_ib = RwSignal::new(String::new());
+    let active_top_tab = RwSignal::new("scatter".to_string());
 
     Effect::new(move |_| {
         save_records(&images.get());
+    });
+    Effect::new(move |_| {
+        save_tags(&tags.get());
     });
 
     let filtered_images = Memo::new(move |_| {
@@ -158,6 +164,12 @@ pub fn App() -> impl IntoView {
             if let Some(item) = list.iter_mut().find(|x| x.id == id) {
                 let mut changed = false;
                 match field {
+                    "tag" => {
+                        if item.tag != value {
+                            item.tag = value;
+                            changed = true;
+                        }
+                    }
                     "source" => {
                         if item.source != value {
                             item.source = value;
@@ -222,6 +234,7 @@ pub fn App() -> impl IntoView {
 
     let on_clear_all = move || {
         images.set(Vec::new());
+        tags.set(default_tag_definitions());
         selected_id.set(None);
         hover_id.set(None);
         clear_records();
@@ -245,6 +258,7 @@ pub fn App() -> impl IntoView {
             .get()
             .and_then(|id| images.get().into_iter().find(|item| item.id == id))
     });
+    let tags_memo = Memo::new(move |_| tags.get());
 
     let on_cancel_batch = move |_| {
         pending_uploads.set(Vec::new());
@@ -294,13 +308,46 @@ pub fn App() -> impl IntoView {
                 filter_ib_max=filter_ib_max
             />
 
-            <ScatterPlot
-                images=filtered_images
-                selected_id=selected_id
-                hover_id=hover_id
-                on_select=Callback::new(move |id| selected_id.set(Some(id)))
-                on_jump=Callback::new(select_and_scroll)
-            />
+            <section class="top-tabs">
+                <div class="tab-header">
+                    <button
+                        class=move || {
+                            if active_top_tab.get() == "scatter" { "tab-btn active" } else { "tab-btn" }
+                        }
+                        on:click=move |_| active_top_tab.set("scatter".to_string())
+                    >
+                        "Scatter Plot"
+                    </button>
+                    <button
+                        class=move || {
+                            if active_top_tab.get() == "tags" { "tab-btn active" } else { "tab-btn" }
+                        }
+                        on:click=move |_| active_top_tab.set("tags".to_string())
+                    >
+                        "Tag Editor"
+                    </button>
+                </div>
+                {move || {
+                    if active_top_tab.get() == "scatter" {
+                        view! {
+                            <ScatterPlot
+                                images=filtered_images
+                                tags=tags_memo
+                                selected_id=selected_id
+                                hover_id=hover_id
+                                on_select=Callback::new(move |id| selected_id.set(Some(id)))
+                                on_jump=Callback::new(select_and_scroll)
+                            />
+                        }
+                            .into_any()
+                    } else {
+                        view! {
+                            <TagEditor tags=tags />
+                        }
+                            .into_any()
+                    }
+                }}
+            </section>
 
             <section class="content-grid">
                 <GalleryList
@@ -311,6 +358,7 @@ pub fn App() -> impl IntoView {
                 />
                 <DetailsPanel
                     selected=selected_record
+                    tags=tags_memo
                     on_update=Callback::new(move |(field, value)| update_selected(field, value))
                     on_delete=Callback::new(move |_| on_delete_selected())
                 />
