@@ -62,6 +62,10 @@ pub fn ScatterPlot(
                 <h2>"Scattering Plot (frequency vs IB)"</h2>
             </div>
             <div class="scatter-wrap">
+                <div
+                    class="scatter-hit-area"
+                    on:mouseleave=move |_| hover_id.set(None)
+                >
                 <svg viewBox=format!("0 0 {} {}", WIDTH, HEIGHT) class="scatter-svg">
                     <line x1=PAD_X y1=HEIGHT-PAD_Y x2=WIDTH-PAD_X y2=HEIGHT-PAD_Y class="axis" />
                     <line x1=PAD_X y1=PAD_Y x2=PAD_X y2=HEIGHT-PAD_Y class="axis" />
@@ -84,7 +88,6 @@ pub fn ScatterPlot(
                                         if selected_id.get() == Some(id) { "dot selected" } else { "dot" }
                                     }
                                     on:mouseover=move |_| hover_id.set(Some(id))
-                                    on:mouseleave=move |_| hover_id.set(None)
                                     on:click=move |_| on_select.run(id)
                                 />
                             }
@@ -108,6 +111,7 @@ pub fn ScatterPlot(
                         </div>
                     }
                 })}
+                </div>
             </div>
         </section>
     }
