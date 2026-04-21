@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::models::ImageRecord;
@@ -7,6 +8,42 @@ const WIDTH: f64 = 900.0;
 const HEIGHT: f64 = 280.0;
 const PAD_X: f64 = 46.0;
 const PAD_Y: f64 = 24.0;
+const AXIS_LIMITS_STORAGE_KEY: &str = "pictagger.scatter.axis_limits.v1";
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct StoredAxisState {
+    x_min_input: String,
+    x_max_input: String,
+    y_min_input: String,
+    y_max_input: String,
+    manual_limits: Option<[f64; 4]>,
+}
+
+fn load_axis_state() -> StoredAxisState {
+    let Some(storage) = web_sys::window()
+        .and_then(|w| w.local_storage().ok())
+        .flatten()
+    else {
+        return StoredAxisState::default();
+    };
+    let Ok(Some(raw)) = storage.get_item(AXIS_LIMITS_STORAGE_KEY) else {
+        return StoredAxisState::default();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn save_axis_state(state: &StoredAxisState) {
+    let Some(storage) = web_sys::window()
+        .and_then(|w| w.local_storage().ok())
+        .flatten()
+    else {
+        return;
+    };
+    let Ok(raw) = serde_json::to_string(state) else {
+        return;
+    };
+    let _ = storage.set_item(AXIS_LIMITS_STORAGE_KEY, &raw);
+}
 
 fn parse_f64_opt(raw: &str) -> Option<f64> {
     raw.trim().parse::<f64>().ok()
@@ -20,13 +57,29 @@ pub fn ScatterPlot(
     on_select: Callback<Uuid>,
     on_jump: Callback<Uuid>,
 ) -> impl IntoView {
+    let initial_axis_state = load_axis_state();
     let show_axis_menu = RwSignal::new(false);
-    let x_min_input = RwSignal::new(String::new());
-    let x_max_input = RwSignal::new(String::new());
-    let y_min_input = RwSignal::new(String::new());
-    let y_max_input = RwSignal::new(String::new());
-    let manual_limits = RwSignal::new(None::<(f64, f64, f64, f64)>);
+    let x_min_input = RwSignal::new(initial_axis_state.x_min_input);
+    let x_max_input = RwSignal::new(initial_axis_state.x_max_input);
+    let y_min_input = RwSignal::new(initial_axis_state.y_min_input);
+    let y_max_input = RwSignal::new(initial_axis_state.y_max_input);
+    let manual_limits = RwSignal::new(
+        initial_axis_state
+            .manual_limits
+            .map(|v| (v[0], v[1], v[2], v[3])),
+    );
     let axis_error = RwSignal::new(String::new());
+
+    Effect::new(move |_| {
+        let state = StoredAxisState {
+            x_min_input: x_min_input.get(),
+            x_max_input: x_max_input.get(),
+            y_min_input: y_min_input.get(),
+            y_max_input: y_max_input.get(),
+            manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
+        };
+        save_axis_state(&state);
+    });
 
     let auto_extents = Memo::new(move |_| {
         let items = images.get();
