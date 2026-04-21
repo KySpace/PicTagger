@@ -1,6 +1,7 @@
 use gloo_file::futures::read_as_data_url;
 use leptos::ev;
 use leptos::prelude::*;
+use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, ScrollBehavior, ScrollIntoViewOptions};
@@ -13,6 +14,77 @@ use crate::models::{ImageRecord, now_millis};
 use crate::storage::{clear_records, load_records, save_records};
 use uuid::Uuid;
 
+#[derive(Clone)]
+struct PendingUpload {
+    name: String,
+    file: gloo_file::File,
+}
+
+fn extract_first_number(name: &str) -> Option<i32> {
+    let mut digits = String::new();
+    let mut in_digits = false;
+    for ch in name.chars() {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+            in_digits = true;
+        } else if in_digits {
+            break;
+        }
+    }
+    if digits.is_empty() {
+        None
+    } else {
+        digits.parse::<i32>().ok()
+    }
+}
+
+fn infer_unique_indexes(files: &[PendingUpload]) -> Vec<Option<i32>> {
+    let mut counts: HashMap<i32, usize> = HashMap::new();
+    let mut extracted = Vec::with_capacity(files.len());
+    for file in files {
+        let value = extract_first_number(&file.name);
+        if let Some(idx) = value {
+            *counts.entry(idx).or_insert(0) += 1;
+        }
+        extracted.push(value);
+    }
+    extracted
+        .into_iter()
+        .map(|value| value.filter(|idx| counts.get(idx).copied().unwrap_or(0) == 1))
+        .collect()
+}
+
+fn process_upload_batch(
+    files: Vec<PendingUpload>,
+    source_tag: String,
+    ib: Option<f64>,
+    images: RwSignal<Vec<ImageRecord>>,
+    selected_id: RwSignal<Option<Uuid>>,
+) {
+    let inferred_indexes = infer_unique_indexes(&files);
+    for (file, index_guess) in files.into_iter().zip(inferred_indexes.into_iter()) {
+        let file_name = file.name.clone();
+        let gloo_file = file.file;
+        let source_tag = source_tag.clone();
+
+        spawn_local(async move {
+            if let Ok(data_url) = read_as_data_url(&gloo_file).await {
+                let mut record = ImageRecord::new(data_url, file_name);
+                record.source_tag = source_tag;
+                if let Some(shared_ib) = ib {
+                    record.ib = shared_ib;
+                }
+                if let Some(inferred_index) = index_guess {
+                    record.index = inferred_index;
+                }
+                let id = record.id;
+                images.update(|list| list.push(record));
+                selected_id.set(Some(id));
+            }
+        });
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     let images = RwSignal::new(load_records());
@@ -20,6 +92,11 @@ pub fn App() -> impl IntoView {
     let filter_ib_min = RwSignal::new(None::<f64>);
     let filter_ib_max = RwSignal::new(None::<f64>);
     let hover_id = RwSignal::new(None::<Uuid>);
+    let pending_uploads = RwSignal::new(Vec::<PendingUpload>::new());
+    let show_batch_modal = RwSignal::new(false);
+    let show_delete_all_modal = RwSignal::new(false);
+    let batch_source_tag = RwSignal::new(String::new());
+    let batch_ib = RwSignal::new(String::new());
 
     Effect::new(move |_| {
         save_records(&images.get());
@@ -47,24 +124,30 @@ pub fn App() -> impl IntoView {
             return;
         };
 
+        let mut picked = Vec::new();
         for i in 0..file_list.length() {
             let Some(file) = file_list.get(i) else {
                 continue;
             };
-            let file_name = file.name();
-            let gloo_file = gloo_file::File::from(file);
-
-            let images = images;
-            let selected_id = selected_id;
-            spawn_local(async move {
-                if let Ok(data_url) = read_as_data_url(&gloo_file).await {
-                    let record = ImageRecord::new(data_url, file_name);
-                    let id = record.id;
-                    images.update(|list| list.push(record));
-                    selected_id.set(Some(id));
-                }
+            picked.push(PendingUpload {
+                name: file.name(),
+                file: gloo_file::File::from(file),
             });
         }
+        if picked.is_empty() {
+            return;
+        }
+
+        if picked.len() > 1 {
+            pending_uploads.set(picked);
+            batch_source_tag.set(String::new());
+            batch_ib.set(String::new());
+            show_batch_modal.set(true);
+        } else {
+            process_upload_batch(picked, String::new(), None, images, selected_id);
+        }
+
+        input.set_value("");
     };
 
     let update_selected = move |field: &'static str, value: String| {
@@ -78,6 +161,12 @@ pub fn App() -> impl IntoView {
                     "source" => {
                         if item.source != value {
                             item.source = value;
+                            changed = true;
+                        }
+                    }
+                    "source_tag" => {
+                        if item.source_tag != value {
+                            item.source_tag = value;
                             changed = true;
                         }
                     }
@@ -157,6 +246,28 @@ pub fn App() -> impl IntoView {
             .and_then(|id| images.get().into_iter().find(|item| item.id == id))
     });
 
+    let on_cancel_batch = move |_| {
+        pending_uploads.set(Vec::new());
+        show_batch_modal.set(false);
+        batch_source_tag.set(String::new());
+        batch_ib.set(String::new());
+    };
+
+    let on_confirm_batch = move |_| {
+        let files = pending_uploads.get();
+        if files.is_empty() {
+            show_batch_modal.set(false);
+            return;
+        }
+        let source_tag = batch_source_tag.get().trim().to_string();
+        let ib = batch_ib.get().trim().parse::<f64>().ok();
+        process_upload_batch(files, source_tag, ib, images, selected_id);
+        pending_uploads.set(Vec::new());
+        show_batch_modal.set(false);
+        batch_source_tag.set(String::new());
+        batch_ib.set(String::new());
+    };
+
     view! {
         <main class="app-shell">
             <header class="toolbar">
@@ -175,7 +286,6 @@ pub fn App() -> impl IntoView {
                             style="display:none"
                         />
                     </label>
-                    <button class="danger" on:click=move |_| on_clear_all()>"Clear All"</button>
                 </div>
             </header>
 
@@ -197,6 +307,7 @@ pub fn App() -> impl IntoView {
                     images=filtered_images
                     selected_id=selected_id
                     on_select=Callback::new(move |id| selected_id.set(Some(id)))
+                    on_request_delete_all=Callback::new(move |_| show_delete_all_modal.set(true))
                 />
                 <DetailsPanel
                     selected=selected_record
@@ -204,6 +315,76 @@ pub fn App() -> impl IntoView {
                     on_delete=Callback::new(move |_| on_delete_selected())
                 />
             </section>
+
+            {move || {
+                if show_batch_modal.get() {
+                    view! {
+                        <div class="modal-backdrop">
+                            <div class="modal-card">
+                                <h3>"Batch Import Settings"</h3>
+                                <p>{move || format!("{} images selected", pending_uploads.get().len())}</p>
+                                <label>
+                                    "Source Tag"
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. experiment_a"
+                                        prop:value=move || batch_source_tag.get()
+                                        on:input=move |ev| batch_source_tag.set(event_target_value(&ev))
+                                    />
+                                </label>
+                                <label>
+                                    "IB (applies to all selected images)"
+                                    <input
+                                        type="text"
+                                        inputmode="decimal"
+                                        placeholder="leave blank to keep default"
+                                        prop:value=move || batch_ib.get()
+                                        on:input=move |ev| batch_ib.set(event_target_value(&ev))
+                                    />
+                                </label>
+                                <p class="modal-note">
+                                    "Index will auto-fill from filename number only when that number is unique in this import batch."
+                                </p>
+                                <div class="modal-actions">
+                                    <button on:click=on_cancel_batch>"Cancel"</button>
+                                    <button on:click=on_confirm_batch>"Import"</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                        .into_any()
+                } else {
+                    ().into_any()
+                }
+            }}
+
+            {move || {
+                if show_delete_all_modal.get() {
+                    view! {
+                        <div class="modal-backdrop">
+                            <div class="modal-card">
+                                <h3>"Delete All Images?"</h3>
+                                <p>"This will permanently remove all gallery records and local saved data."</p>
+                                <div class="modal-actions">
+                                    <button on:click=move |_| show_delete_all_modal.set(false)>"Cancel"</button>
+                                    <button
+                                        class="danger"
+                                        on:click=move |_| {
+                                            show_delete_all_modal.set(false);
+                                            on_clear_all();
+                                        }
+                                    >
+                                        "Delete All"
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                        .into_any()
+                } else {
+                    ().into_any()
+                }
+            }}
         </main>
     }
 }

@@ -7,6 +7,8 @@ pub struct ImageRecord {
     pub image_data: String,
     pub ib: f64,
     pub source: String,
+    #[serde(default)]
+    pub source_tag: String,
     pub index: i32,
     pub frequency: f64,
     pub weight: f64,
@@ -22,6 +24,7 @@ impl ImageRecord {
             image_data,
             ib: 0.0,
             source,
+            source_tag: String::new(),
             index: 0,
             frequency: 0.0,
             weight: 0.0,

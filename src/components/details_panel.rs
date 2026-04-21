@@ -25,6 +25,14 @@ pub fn DetailsPanel(
                                 />
                             </label>
                             <label>
+                                "Source Tag"
+                                <input
+                                    type="text"
+                                    prop:value=item.source_tag
+                                    on:input=move |ev| on_update.run(("source_tag", event_target_value(&ev)))
+                                />
+                            </label>
+                            <label>
                                 "IB"
                                 <input
                                     type="number"
