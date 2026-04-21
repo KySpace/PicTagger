@@ -138,7 +138,6 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
-        <link data-trunk rel="css" href="style.css" />
         <main class="app-shell">
             <header class="toolbar">
                 <div class="toolbar-left">
