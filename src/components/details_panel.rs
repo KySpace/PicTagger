@@ -8,14 +8,22 @@ pub fn DetailsPanel(
     on_update: Callback<(&'static str, String)>,
     on_delete: Callback<()>,
 ) -> impl IntoView {
+    let show_preview_modal = RwSignal::new(false);
+
     view! {
         <aside class="details-panel">
             <h2>"Details"</h2>
             {move || match selected.get() {
                 Some(item) => {
+                    let preview_src = item.image_data.clone();
                     view! {
                         <div class="details-content">
-                            <img src=item.image_data.clone() alt="selected preview" />
+                            <img
+                                src=item.image_data.clone()
+                                alt="selected preview"
+                                title="Double click to enlarge"
+                                on:dblclick=move |_| show_preview_modal.set(true)
+                            />
                             <label>
                                 "Source"
                                 <input
@@ -72,6 +80,26 @@ pub fn DetailsPanel(
                                 "Delete Selected"
                             </button>
                         </div>
+                        {move || {
+                            if show_preview_modal.get() {
+                                view! {
+                                    <div
+                                        class="modal-backdrop image-preview-backdrop"
+                                        on:click=move |_| show_preview_modal.set(false)
+                                    >
+                                        <div class="image-preview-card" on:click=move |ev| ev.stop_propagation()>
+                                            <img src=preview_src.clone() alt="full preview" />
+                                            <div class="modal-actions">
+                                                <button on:click=move |_| show_preview_modal.set(false)>"Close"</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                    .into_any()
+                            } else {
+                                ().into_any()
+                            }
+                        }}
                     }
                         .into_any()
                 }

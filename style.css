@@ -328,6 +328,29 @@ input {
   gap: 0.5rem;
 }
 
+.image-preview-backdrop {
+  z-index: 60;
+}
+
+.image-preview-card {
+  width: min(92vw, 1200px);
+  max-height: 90vh;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.image-preview-card img {
+  width: 100%;
+  height: min(78vh, 900px);
+  object-fit: contain;
+  background: #eef2ea;
+  border-radius: 10px;
+}
+
 @media (max-width: 1040px) {
   .content-grid {
     grid-template-columns: 1fr;
