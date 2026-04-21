@@ -73,31 +73,51 @@ pub fn App() -> impl IntoView {
         };
         images.update(|list| {
             if let Some(item) = list.iter_mut().find(|x| x.id == id) {
+                let mut changed = false;
                 match field {
-                    "source" => item.source = value,
+                    "source" => {
+                        if item.source != value {
+                            item.source = value;
+                            changed = true;
+                        }
+                    }
                     "ib" => {
                         if let Ok(v) = value.parse::<f64>() {
-                            item.ib = v;
+                            if (item.ib - v).abs() > f64::EPSILON {
+                                item.ib = v;
+                                changed = true;
+                            }
                         }
                     }
                     "index" => {
                         if let Ok(v) = value.parse::<i32>() {
-                            item.index = v;
+                            if item.index != v {
+                                item.index = v;
+                                changed = true;
+                            }
                         }
                     }
                     "frequency" => {
                         if let Ok(v) = value.parse::<f64>() {
-                            item.frequency = v;
+                            if (item.frequency - v).abs() > f64::EPSILON {
+                                item.frequency = v;
+                                changed = true;
+                            }
                         }
                     }
                     "weight" => {
                         if let Ok(v) = value.parse::<f64>() {
-                            item.weight = v;
+                            if (item.weight - v).abs() > f64::EPSILON {
+                                item.weight = v;
+                                changed = true;
+                            }
                         }
                     }
                     _ => {}
                 }
-                item.updated_at = now_millis();
+                if changed {
+                    item.updated_at = now_millis();
+                }
             }
         });
     };
