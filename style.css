@@ -1,0 +1,290 @@
+:root {
+  --bg: #f4f7f2;
+  --panel: #ffffff;
+  --ink: #202524;
+  --line: #d6ddd2;
+  --accent: #12646f;
+  --accent-soft: #def2f0;
+  --danger: #b6403a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top left, #eef5de 0%, var(--bg) 55%);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.app-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+}
+
+.toolbar-left h1 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.toolbar-left p {
+  margin: 0.2rem 0 0;
+  opacity: 0.7;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: 0.6rem;
+}
+
+button,
+.button-like {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  padding: 0.4rem 0.7rem;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+
+.button-like {
+  display: inline-flex;
+  align-items: center;
+}
+
+button:hover,
+.button-like:hover {
+  border-color: var(--accent);
+}
+
+button.danger {
+  border-color: #e5b5b2;
+  color: var(--danger);
+}
+
+.filter-bar {
+  margin-top: 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+}
+
+.filter-bar h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.filter-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.35rem 0.45rem;
+  background: #fff;
+}
+
+.scatter-panel {
+  margin-top: 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.scatter-header h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.scatter-wrap {
+  position: relative;
+}
+
+.scatter-svg {
+  width: 100%;
+  height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f9fcf8 0%, #f4f7f2 100%);
+}
+
+.axis {
+  stroke: #68726f;
+  stroke-width: 1;
+}
+
+.axis-label {
+  fill: #4e5655;
+  font-size: 11px;
+}
+
+.dot {
+  fill: var(--accent);
+  opacity: 0.9;
+}
+
+.dot.selected {
+  fill: #c66a00;
+}
+
+.hover-card {
+  position: absolute;
+  width: 190px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+  padding: 0.45rem;
+  z-index: 2;
+}
+
+.hover-card img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.hover-card p {
+  margin: 0.35rem 0 0;
+  font-size: 0.74rem;
+}
+
+.hover-actions {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.3rem;
+}
+
+.hover-actions button {
+  font-size: 0.72rem;
+  padding: 0.3rem 0.35rem;
+}
+
+.content-grid {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: 1fr minmax(300px, 360px);
+  gap: 0.9rem;
+}
+
+.gallery-panel,
+.details-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+}
+
+.gallery-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.gallery-title h2,
+.details-panel h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.gallery-list {
+  max-height: 58vh;
+  overflow: auto;
+  padding-right: 0.2rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.gallery-item {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.4rem;
+  cursor: pointer;
+}
+
+.gallery-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.gallery-item img {
+  width: 132px;
+  height: 88px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.gallery-meta p {
+  margin: 0 0 0.25rem;
+  font-size: 0.83rem;
+}
+
+.gallery-meta .source {
+  font-weight: 600;
+}
+
+.details-panel {
+  position: sticky;
+  top: 0.9rem;
+  height: fit-content;
+}
+
+.details-content {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.details-content img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.details-empty {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1040px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+  .details-panel {
+    position: static;
+  }
+}

@@ -1,5 +1,6 @@
 ## Attentions
 Always ask when you are having trouble accessing a tool through prompt or when you want to load a library that is not planend.
+This project is for local data processing only: all images must come from local files. Do not add camera capture, webcam, or any device-camera workflow.
 
 ## Plan: Leptos Front-End Only PicTagger
 
