@@ -9,6 +9,8 @@ use wasm_bindgen::prelude::*;
 use crate::models::{ImageRecord, TagDefinition};
 
 const AXIS_LIMITS_STORAGE_KEY: &str = "pictagger.scatter.axis_limits.v1";
+const ALL_TAGS_FILTER: &str = "__all__";
+const UNTAGGED_FILTER: &str = "__untagged__";
 
 #[wasm_bindgen(module = "/src/plotly_bridge.js")]
 extern "C" {
@@ -37,6 +39,8 @@ struct StoredAxisState {
     threshold_mode: bool,
     #[serde(default)]
     weight_threshold: f64,
+    #[serde(default = "all_tags_filter")]
+    tag_filter: String,
 }
 
 impl Default for StoredAxisState {
@@ -51,6 +55,7 @@ impl Default for StoredAxisState {
             y_axis_type: linear_axis(),
             threshold_mode: false,
             weight_threshold: 0.0,
+            tag_filter: all_tags_filter(),
         }
     }
 }
@@ -81,6 +86,10 @@ struct PlotPoint {
 
 fn linear_axis() -> String {
     "linear".to_string()
+}
+
+fn all_tags_filter() -> String {
+    ALL_TAGS_FILTER.to_string()
 }
 
 fn load_axis_state() -> StoredAxisState {
@@ -161,6 +170,7 @@ pub fn ScatterPlot(
     let y_axis_type = RwSignal::new(initial_axis_state.y_axis_type);
     let threshold_mode = RwSignal::new(initial_axis_state.threshold_mode);
     let weight_threshold = RwSignal::new(initial_axis_state.weight_threshold.clamp(0.0, 1.0));
+    let tag_filter = RwSignal::new(initial_axis_state.tag_filter);
     let axis_error = RwSignal::new(String::new());
     let plot_ref = NodeRef::<leptos::html::Div>::new();
     let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
@@ -176,6 +186,7 @@ pub fn ScatterPlot(
             y_axis_type: y_axis_type.get(),
             threshold_mode: threshold_mode.get(),
             weight_threshold: weight_threshold.get(),
+            tag_filter: tag_filter.get(),
         };
         save_axis_state(&state);
     });
@@ -187,11 +198,24 @@ pub fn ScatterPlot(
             .collect::<HashMap<_, _>>()
     });
 
+    let tag_options = Memo::new(move |_| {
+        tags.get()
+            .into_iter()
+            .map(|tag| tag.name)
+            .collect::<Vec<_>>()
+    });
+
     let plot_points = Memo::new(move |_| {
         let colors = tag_color_map.get();
+        let active_tag_filter = tag_filter.get();
         images
             .get()
             .into_iter()
+            .filter(|item| match active_tag_filter.as_str() {
+                ALL_TAGS_FILTER => true,
+                UNTAGGED_FILTER => item.tag.is_empty(),
+                tag_name => item.tag == tag_name,
+            })
             .flat_map(|item| {
                 let color = colors
                     .get(&item.tag)
@@ -386,6 +410,28 @@ pub fn ScatterPlot(
                         >
                             <option value="linear">"Linear"</option>
                             <option value="log">"Log"</option>
+                        </select>
+                    </label>
+                    <label>
+                        "Tag"
+                        <select
+                            prop:value=move || tag_filter.get()
+                            on:change=move |ev| tag_filter.set(event_target_value(&ev))
+                        >
+                            <option value=ALL_TAGS_FILTER>"All"</option>
+                            <option value=UNTAGGED_FILTER>"No tag"</option>
+                            {move || {
+                                tag_options
+                                    .get()
+                                    .into_iter()
+                                    .map(|name| {
+                                        let value = name.clone();
+                                        view! {
+                                            <option value=value>{name}</option>
+                                        }
+                                    })
+                                    .collect_view()
+                            }}
                         </select>
                     </label>
                     <label class="threshold-toggle">
