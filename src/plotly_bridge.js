@@ -29,14 +29,6 @@ function markerOpacity(points) {
   return weights.map((weight) => 0.25 + ((weight - min) / (max - min)) * 0.75);
 }
 
-function visiblePoints(points, payload) {
-  if (!payload.threshold_mode) {
-    return points;
-  }
-  const threshold = Number(payload.weight_threshold ?? 0);
-  return points.filter((point) => point.weight >= threshold);
-}
-
 export function renderPlotlyScatter(
   element,
   payloadJson,
@@ -51,13 +43,24 @@ export function renderPlotlyScatter(
   }
 
   const payload = JSON.parse(payloadJson);
-  const points = visiblePoints(payload.points ?? [], payload);
+  const points = payload.points ?? [];
   const selectedId = payload.selected_id;
+  const threshold = Number(payload.weight_threshold ?? 0);
   const customData = points.map((point) => [point.id, point.pair_index]);
-  const lineWidths = points.map((point) => (point.id === selectedId ? 2.5 : 0));
-  const lineColors = points.map((point) =>
-    point.id === selectedId ? "#c66a00" : "transparent",
-  );
+  const isBelowThreshold = (point) =>
+    payload.threshold_mode && point.weight < threshold;
+  const lineWidths = points.map((point) => {
+    if (point.id === selectedId) {
+      return 2.5;
+    }
+    return isBelowThreshold(point) ? 2 : 0;
+  });
+  const lineColors = points.map((point) => {
+    if (point.id === selectedId) {
+      return "#c66a00";
+    }
+    return isBelowThreshold(point) ? point.color : "transparent";
+  });
 
   element.__pictaggerOnSelect = onSelect;
   element.__pictaggerOnHover = onHover;
@@ -82,7 +85,9 @@ export function renderPlotlyScatter(
     hovertemplate: "%{text}<extra></extra>",
     marker: {
       size: 9,
-      color: points.map((point) => point.color),
+      color: points.map((point) =>
+        isBelowThreshold(point) ? "rgba(255,255,255,0)" : point.color,
+      ),
       opacity: payload.threshold_mode ? 1 : markerOpacity(points),
       line: {
         color: lineColors,
