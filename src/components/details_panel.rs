@@ -12,7 +12,8 @@ pub fn DetailsPanel(
 ) -> impl IntoView {
     let show_preview_modal = RwSignal::new(false);
     let show_tag_menu = RwSignal::new(false);
-    let has_selected = move || selected.get().is_some();
+    let selected_id = Memo::new(move |_| selected.get().map(|item| item.id));
+    let has_selected = move || selected_id.get().is_some();
     let tag_color_map = Memo::new(move |_| {
         tags.get()
             .into_iter()
@@ -172,28 +173,30 @@ pub fn DetailsPanel(
                                                     })
                                                     .unwrap_or_default()
                                             }
-                                            key=|(index, _)| *index
-                                            children=move |(index, pair)| {
-                                                view! {
-                                                    <div class="pair-row">
-                                                        <input
-                                                            type="text"
-                                                            inputmode="decimal"
-                                                            placeholder="frequency"
-                                                            prop:value=pair.frequency.map(|v| v.to_string()).unwrap_or_default()
-                                                            on:change=move |ev| {
-                                                                on_update.run((format!("pair_frequency:{index}"), event_target_value(&ev)))
-                                                            }
-                                                        />
-                                                        <input
-                                                            type="text"
-                                                            inputmode="decimal"
-                                                            placeholder="weight"
-                                                            prop:value=pair.weight.map(|v| v.to_string()).unwrap_or_default()
-                                                            on:change=move |ev| {
-                                                                on_update.run((format!("pair_weight:{index}"), event_target_value(&ev)))
-                                                            }
-                                                        />
+                                        key=|(index, _)| *index
+                                        children=move |(index, pair)| {
+                                            view! {
+                                                <div class="pair-row">
+                                                    <input
+                                                        type="text"
+                                                        inputmode="decimal"
+                                                        placeholder="frequency"
+                                                        value=pair.frequency.map(|v| v.to_string()).unwrap_or_default()
+                                                        on:change=move |ev| {
+                                                            let value = event_target_value(&ev);
+                                                            on_update.run((format!("pair_frequency:{index}"), value));
+                                                        }
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        inputmode="decimal"
+                                                        placeholder="weight"
+                                                        value=pair.weight.map(|v| v.to_string()).unwrap_or_default()
+                                                        on:change=move |ev| {
+                                                            let value = event_target_value(&ev);
+                                                            on_update.run((format!("pair_weight:{index}"), value));
+                                                        }
+                                                    />
                                                     </div>
                                                 }
                                             }
