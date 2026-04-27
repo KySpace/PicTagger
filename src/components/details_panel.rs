@@ -32,143 +32,147 @@ pub fn DetailsPanel(
                 if has_selected() {
                     view! {
                         <div class="details-content">
-                            <img
-                                src=move || {
-                                    selected
-                                        .get()
-                                        .map(|item| item.image_data)
-                                        .unwrap_or_default()
-                                }
-                                alt="selected preview"
-                                title="Double click to enlarge"
-                                on:dblclick=move |_| show_preview_modal.set(true)
-                            />
-                            <label>
-                                "Tag"
-                                <div class="tag-input-row">
-                                    <span
-                                        class="tag-color-swatch"
-                                        style=move || format!("background:{};", selected_tag_color())
-                                    ></span>
+                            <div class="details-form">
+                                <label>
+                                    "Tag"
+                                    <div class="tag-input-row">
+                                        <span
+                                            class="tag-color-swatch"
+                                            style=move || format!("background:{};", selected_tag_color())
+                                        ></span>
+                                        <input
+                                            type="text"
+                                            list="tag-options"
+                                            prop:value=move || {
+                                                selected.get().map(|item| item.tag).unwrap_or_default()
+                                            }
+                                            on:input=move |ev| on_update.run(("tag".to_string(), event_target_value(&ev)))
+                                        />
+                                    </div>
+                                    <datalist id="tag-options">
+                                        <For
+                                            each=move || tags.get()
+                                            key=|t| t.name.clone()
+                                            children=move |t| view! { <option value=t.name></option> }
+                                        />
+                                    </datalist>
+                                </label>
+                                <label>
+                                    "Source"
                                     <input
                                         type="text"
-                                        list="tag-options"
                                         prop:value=move || {
-                                            selected.get().map(|item| item.tag).unwrap_or_default()
+                                            selected.get().map(|item| item.source).unwrap_or_default()
                                         }
-                                        on:input=move |ev| on_update.run(("tag".to_string(), event_target_value(&ev)))
+                                        on:input=move |ev| on_update.run(("source".to_string(), event_target_value(&ev)))
                                     />
-                                </div>
-                                <datalist id="tag-options">
-                                    <For
-                                        each=move || tags.get()
-                                        key=|t| t.name.clone()
-                                        children=move |t| view! { <option value=t.name></option> }
+                                </label>
+                                <label>
+                                    "Source Tag"
+                                    <input
+                                        type="text"
+                                        prop:value=move || {
+                                            selected.get().map(|item| item.source_tag).unwrap_or_default()
+                                        }
+                                        on:input=move |ev| on_update.run(("source_tag".to_string(), event_target_value(&ev)))
                                     />
-                                </datalist>
-                            </label>
-                            <label>
-                                "Source"
-                                <input
-                                    type="text"
-                                    prop:value=move || {
-                                        selected.get().map(|item| item.source).unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("source".to_string(), event_target_value(&ev)))
-                                />
-                            </label>
-                            <label>
-                                "Source Tag"
-                                <input
-                                    type="text"
-                                    prop:value=move || {
-                                        selected.get().map(|item| item.source_tag).unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("source_tag".to_string(), event_target_value(&ev)))
-                                />
-                            </label>
-                            <label>
-                                "IB"
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    prop:value=move || {
-                                        selected
-                                            .get()
-                                            .map(|item| item.ib.to_string())
-                                            .unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("ib".to_string(), event_target_value(&ev)))
-                                />
-                            </label>
-                            <label>
-                                "Index"
-                                <input
-                                    type="text"
-                                    inputmode="numeric"
-                                    prop:value=move || {
-                                        selected
-                                            .get()
-                                            .map(|item| item.index.to_string())
-                                            .unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("index".to_string(), event_target_value(&ev)))
-                                />
-                            </label>
-                            <label>
-                                "Frequency / Weight"
-                                <div class="pair-list">
-                                    <For
-                                        each=move || {
+                                </label>
+                                <label>
+                                    "IB"
+                                    <input
+                                        type="text"
+                                        inputmode="decimal"
+                                        prop:value=move || {
                                             selected
                                                 .get()
-                                                .map(|item| {
-                                                    item.freq_weight_pairs
-                                                        .into_iter()
-                                                        .enumerate()
-                                                        .collect::<Vec<_>>()
-                                                })
+                                                .map(|item| item.ib.to_string())
                                                 .unwrap_or_default()
                                         }
-                                        key=|(index, _)| *index
-                                        children=move |(index, pair)| {
-                                            view! {
-                                                <div class="pair-row">
-                                                    <input
-                                                        type="text"
-                                                        inputmode="decimal"
-                                                        placeholder="frequency"
-                                                        prop:value=pair.frequency.map(|v| v.to_string()).unwrap_or_default()
-                                                        on:change=move |ev| {
-                                                            on_update.run((format!("pair_frequency:{index}"), event_target_value(&ev)))
-                                                        }
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        inputmode="decimal"
-                                                        placeholder="weight"
-                                                        prop:value=pair.weight.map(|v| v.to_string()).unwrap_or_default()
-                                                        on:change=move |ev| {
-                                                            on_update.run((format!("pair_weight:{index}"), event_target_value(&ev)))
-                                                        }
-                                                    />
-                                                </div>
-                                            }
-                                        }
+                                        on:input=move |ev| on_update.run(("ib".to_string(), event_target_value(&ev)))
                                     />
+                                </label>
+                                <label>
+                                    "Index"
+                                    <input
+                                        type="text"
+                                        inputmode="numeric"
+                                        prop:value=move || {
+                                            selected
+                                                .get()
+                                                .map(|item| item.index.to_string())
+                                                .unwrap_or_default()
+                                        }
+                                        on:input=move |ev| on_update.run(("index".to_string(), event_target_value(&ev)))
+                                    />
+                                </label>
+                                <label>
+                                    "Frequency / Weight"
+                                    <div class="pair-list">
+                                        <For
+                                            each=move || {
+                                                selected
+                                                    .get()
+                                                    .map(|item| {
+                                                        item.freq_weight_pairs
+                                                            .into_iter()
+                                                            .enumerate()
+                                                            .collect::<Vec<_>>()
+                                                    })
+                                                    .unwrap_or_default()
+                                            }
+                                            key=|(index, _)| *index
+                                            children=move |(index, pair)| {
+                                                view! {
+                                                    <div class="pair-row">
+                                                        <input
+                                                            type="text"
+                                                            inputmode="decimal"
+                                                            placeholder="frequency"
+                                                            prop:value=pair.frequency.map(|v| v.to_string()).unwrap_or_default()
+                                                            on:change=move |ev| {
+                                                                on_update.run((format!("pair_frequency:{index}"), event_target_value(&ev)))
+                                                            }
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            inputmode="decimal"
+                                                            placeholder="weight"
+                                                            prop:value=pair.weight.map(|v| v.to_string()).unwrap_or_default()
+                                                            on:change=move |ev| {
+                                                                on_update.run((format!("pair_weight:{index}"), event_target_value(&ev)))
+                                                            }
+                                                        />
+                                                    </div>
+                                                }
+                                            }
+                                        />
+                                    </div>
+                                </label>
+                                <div class="pair-actions">
+                                    <button on:click=move |_| on_update.run(("add_pair".to_string(), String::new()))>
+                                        "Add Pair"
+                                    </button>
+                                    <button on:click=move |_| on_update.run(("clear_pairs".to_string(), String::new()))>
+                                        "Clear Pairs"
+                                    </button>
                                 </div>
-                            </label>
-                            <div class="pair-actions">
-                                <button on:click=move |_| on_update.run(("add_pair".to_string(), String::new()))>
-                                    "Add Pair"
-                                </button>
-                                <button on:click=move |_| on_update.run(("clear_pairs".to_string(), String::new()))>
-                                    "Clear Pairs"
+                                <button class="danger" on:click=move |_| on_delete.run(())>
+                                    "Delete Selected"
                                 </button>
                             </div>
-                            <button class="danger" on:click=move |_| on_delete.run(())>
-                                "Delete Selected"
-                            </button>
+                            <div class="details-image-pane">
+                                <img
+                                    src=move || {
+                                        selected
+                                            .get()
+                                            .map(|item| item.image_data)
+                                            .unwrap_or_default()
+                                    }
+                                    alt="selected preview"
+                                    title="Double click to enlarge"
+                                    on:dblclick=move |_| show_preview_modal.set(true)
+                                />
+                            </div>
                         </div>
                         {move || {
                             if show_preview_modal.get() {
