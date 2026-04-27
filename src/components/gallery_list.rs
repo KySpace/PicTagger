@@ -58,7 +58,10 @@ pub fn GalleryList(
                                 <img src=item.image_data alt="gallery item" loading="lazy" />
                                 <div class="gallery-meta">
                                     <p class="source">{item.source.clone()}</p>
-                                    <p>{format!("tag: {}", item.tag)}</p>
+                                    <p class="gallery-tag-line">
+                                        <span class="tag-color-swatch" style=format!("background:{};", tag_color)></span>
+                                        <span>{format!("tag: {}", item.tag)}</span>
+                                    </p>
                                     <p>{format!("source_tag: {}", item.source_tag)}</p>
                                     <p>{format!("IB: {:.3}  pairs: {}", item.ib, item.freq_weight_pairs.iter().filter(|pair| pair.frequency.is_some()).count())}</p>
                                     <p>{format!("index: {}", item.index)}</p>

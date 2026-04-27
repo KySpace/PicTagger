@@ -337,6 +337,12 @@ input {
   font-weight: 600;
 }
 
+.gallery-tag-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .details-panel {
   position: sticky;
   top: 0.9rem;
@@ -354,6 +360,22 @@ input {
   object-fit: contain;
   background: #eef2ea;
   border-radius: 8px;
+}
+
+.tag-input-row {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.tag-color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #c8d0c6;
+  border-radius: 999px;
+  display: inline-block;
+  flex: 0 0 auto;
 }
 
 .pair-list {

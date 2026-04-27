@@ -1,6 +1,7 @@
 use leptos::prelude::*;
+use std::collections::HashMap;
 
-use crate::models::{ImageRecord, TagDefinition};
+use crate::models::{ImageRecord, TagDefinition, oklch_from_hue};
 
 #[component]
 pub fn DetailsPanel(
@@ -11,6 +12,18 @@ pub fn DetailsPanel(
 ) -> impl IntoView {
     let show_preview_modal = RwSignal::new(false);
     let has_selected = move || selected.get().is_some();
+    let tag_color_map = Memo::new(move |_| {
+        tags.get()
+            .into_iter()
+            .map(|t| (t.name, oklch_from_hue(t.hue)))
+            .collect::<HashMap<_, _>>()
+    });
+    let selected_tag_color = move || {
+        selected
+            .get()
+            .and_then(|item| tag_color_map.get().get(&item.tag).cloned())
+            .unwrap_or_else(|| "transparent".to_string())
+    };
 
     view! {
         <aside class="details-panel">
@@ -32,14 +45,20 @@ pub fn DetailsPanel(
                             />
                             <label>
                                 "Tag"
-                                <input
-                                    type="text"
-                                    list="tag-options"
-                                    prop:value=move || {
-                                        selected.get().map(|item| item.tag).unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("tag".to_string(), event_target_value(&ev)))
-                                />
+                                <div class="tag-input-row">
+                                    <span
+                                        class="tag-color-swatch"
+                                        style=move || format!("background:{};", selected_tag_color())
+                                    ></span>
+                                    <input
+                                        type="text"
+                                        list="tag-options"
+                                        prop:value=move || {
+                                            selected.get().map(|item| item.tag).unwrap_or_default()
+                                        }
+                                        on:input=move |ev| on_update.run(("tag".to_string(), event_target_value(&ev)))
+                                    />
+                                </div>
                                 <datalist id="tag-options">
                                     <For
                                         each=move || tags.get()
@@ -120,7 +139,7 @@ pub fn DetailsPanel(
                                                         inputmode="decimal"
                                                         placeholder="frequency"
                                                         prop:value=pair.frequency.map(|v| v.to_string()).unwrap_or_default()
-                                                        on:input=move |ev| {
+                                                        on:change=move |ev| {
                                                             on_update.run((format!("pair_frequency:{index}"), event_target_value(&ev)))
                                                         }
                                                     />
@@ -129,7 +148,7 @@ pub fn DetailsPanel(
                                                         inputmode="decimal"
                                                         placeholder="weight"
                                                         prop:value=pair.weight.map(|v| v.to_string()).unwrap_or_default()
-                                                        on:input=move |ev| {
+                                                        on:change=move |ev| {
                                                             on_update.run((format!("pair_weight:{index}"), event_target_value(&ev)))
                                                         }
                                                     />
