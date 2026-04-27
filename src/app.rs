@@ -1,10 +1,14 @@
-use gloo_file::futures::read_as_data_url;
+use gloo_file::futures::{read_as_bytes, read_as_data_url, read_as_text};
 use leptos::ev;
 use leptos::prelude::*;
+use js_sys::{Array, Uint8Array};
 use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlInputElement, ScrollBehavior, ScrollIntoViewOptions};
+use web_sys::{
+    Blob, BlobPropertyBag, HtmlAnchorElement, HtmlInputElement, ScrollBehavior,
+    ScrollIntoViewOptions, Url,
+};
 
 use crate::components::details_panel::DetailsPanel;
 use crate::components::filter_bar::IbFilterBar;
@@ -12,7 +16,10 @@ use crate::components::gallery_list::GalleryList;
 use crate::components::scatter_plot::ScatterPlot;
 use crate::components::tag_editor::TagEditor;
 use crate::models::{FrequencyWeightPair, ImageRecord, default_frequency_weight_pairs, default_tag_definitions, now_millis};
-use crate::storage::{clear_records, load_records, load_tags, save_records, save_tags};
+use crate::storage::{
+    clear_records, export_cache_zip, import_cache_yaml, import_cache_zip, load_records, load_tags,
+    save_records, save_tags,
+};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -86,6 +93,37 @@ fn process_upload_batch(
     }
 }
 
+fn download_binary_file(filename: &str, content: &[u8], mime_type: &str) {
+    let parts = Array::new();
+    let bytes = Uint8Array::from(content);
+    parts.push(&bytes);
+
+    let options = BlobPropertyBag::new();
+    options.set_type(mime_type);
+    let Ok(blob) = Blob::new_with_u8_array_sequence_and_options(&parts, &options) else {
+        return;
+    };
+    let Ok(url) = Url::create_object_url_with_blob(&blob) else {
+        return;
+    };
+    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        let _ = Url::revoke_object_url(&url);
+        return;
+    };
+    let Ok(element) = document.create_element("a") else {
+        let _ = Url::revoke_object_url(&url);
+        return;
+    };
+    let Ok(anchor) = element.dyn_into::<HtmlAnchorElement>() else {
+        let _ = Url::revoke_object_url(&url);
+        return;
+    };
+    anchor.set_href(&url);
+    anchor.set_download(filename);
+    anchor.click();
+    let _ = Url::revoke_object_url(&url);
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     let images = RwSignal::new(load_records());
@@ -153,6 +191,58 @@ pub fn App() -> impl IntoView {
             process_upload_batch(picked, String::new(), None, images, selected_id);
         }
 
+        input.set_value("");
+    };
+
+    let on_export_zip = move |_| {
+        if let Ok(payload) = export_cache_zip(&images.get(), &tags.get()) {
+            download_binary_file("pictagger-cache.zip", &payload, "application/zip");
+        }
+    };
+
+    let on_import_cache = move |ev: ev::Event| {
+        let Some(input) = ev
+            .target()
+            .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
+        else {
+            return;
+        };
+        let Some(file_list) = input.files() else {
+            return;
+        };
+        let Some(file) = file_list.get(0) else {
+            return;
+        };
+        let file_name = file.name();
+        let cache_file = gloo_file::File::from(file);
+        let images = images;
+        let tags = tags;
+        let selected_id = selected_id;
+        let hover_id = hover_id;
+        spawn_local(async move {
+            let imported = if file_name.to_ascii_lowercase().ends_with(".zip") {
+                read_as_bytes(&cache_file)
+                    .await
+                    .ok()
+                    .and_then(|bytes| import_cache_zip(&bytes).ok())
+            } else {
+                read_as_text(&cache_file)
+                    .await
+                    .ok()
+                    .and_then(|raw| import_cache_yaml(&raw).ok())
+            };
+
+            if let Some((imported_images, imported_tags)) = imported {
+                    images.set(imported_images);
+                    tags.set(if imported_tags.is_empty() {
+                        default_tag_definitions()
+                    } else {
+                        imported_tags
+                    });
+                    selected_id.set(None);
+                    hover_id.set(None);
+            }
+        });
         input.set_value("");
     };
 
@@ -328,6 +418,16 @@ pub fn App() -> impl IntoView {
                     <p>"Leptos front-end MVP"</p>
                 </div>
                 <div class="toolbar-right">
+                    <button on:click=on_export_zip>"Export ZIP"</button>
+                    <label class="button-like">
+                        "Import Cache"
+                        <input
+                            type="file"
+                            accept=".zip,.yaml,.yml,application/zip,application/x-yaml,text/yaml,text/plain"
+                            on:change=on_import_cache
+                            style="display:none"
+                        />
+                    </label>
                     <label class="button-like">
                         "Add Images"
                         <input

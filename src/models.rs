@@ -22,6 +22,8 @@ impl FrequencyWeightPair {
 pub struct ImageRecord {
     pub id: Uuid,
     pub image_data: String,
+    #[serde(default)]
+    pub image_path: String,
     pub ib: f64,
     pub source: String,
     #[serde(default)]
@@ -45,6 +47,7 @@ impl ImageRecord {
         Self {
             id: Uuid::new_v4(),
             image_data,
+            image_path: source.clone(),
             ib: 0.0,
             source,
             source_tag: String::new(),
