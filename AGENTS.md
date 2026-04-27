@@ -174,6 +174,31 @@ The latest interrupted request was not implemented yet:
    - Hide points with weight below threshold.
    - Show points at or above threshold at full opacity.
 
+## Details Input Performance Plan
+
+The Details panel can become laggy because several fields still commit to the global `images` signal on every keystroke. Each commit can trigger full gallery serialization to `localStorage`, filtered image recomputation, gallery updates, and scatter plot recomputation.
+
+Recommended optimization order:
+
+1. Buffer Details text inputs locally.
+   - Use local `RwSignal<String>` draft values for `source`, `source_tag`, `ib`, and `index`.
+   - Update draft values on `input`.
+   - Commit to `images` only on `change`/blur or Enter.
+   - Keep the existing frequency/weight behavior, which already commits on change/blur to avoid input lag.
+2. Debounce active cache persistence.
+   - Replace immediate `save_records(&images.get())` on every `images` change with a short debounced save.
+   - This avoids synchronous `serde_json::to_string` and `localStorage.set_item` work during typing.
+3. Split metadata persistence from image data persistence.
+   - Store frequently edited metadata separately from large image data URLs.
+   - Rewrite image data only when images are added, imported, deleted, or reset.
+   - Metadata edits should not rewrite hundreds of embedded image strings.
+4. Reduce gallery recomputation.
+   - Avoid repeated `images.get().into_iter().find(...)` lookups inside each gallery card.
+   - Pass card data directly, use a keyed map, or introduce more granular per-record state.
+5. Consider granular record state.
+   - A single `RwSignal<Vec<ImageRecord>>` invalidates gallery, details, filters, and scatter plot together.
+   - Per-record signals, a Leptos store, or a metadata map keyed by `Uuid` would let edits to one selected record avoid waking unrelated UI.
+
 ## Known Risks
 
 1. Browser `localStorage` can hit size limits when many large images are stored as data URLs.
