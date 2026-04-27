@@ -53,7 +53,7 @@ export function renderPlotlyScatter(
     if (point.id === selectedId) {
       return 2.5;
     }
-    return isBelowThreshold(point) ? 2 : 0;
+    return isBelowThreshold(point) ? 1 : 0;
   });
   const lineColors = points.map((point) => {
     if (point.id === selectedId) {
