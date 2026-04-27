@@ -206,6 +206,57 @@ select {
   text-align: center;
 }
 
+.plotly-hover-preview {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 40;
+  width: min(360px, calc(100vw - 2rem));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  padding: 0.55rem;
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 0.6rem;
+}
+
+.plotly-hover-preview img {
+  width: 128px;
+  height: 104px;
+  object-fit: contain;
+  background: #eef2ea;
+  border-radius: 6px;
+}
+
+.plotly-hover-meta {
+  min-width: 0;
+}
+
+.plotly-hover-meta p {
+  margin: 0 0 0.24rem;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.plotly-hover-meta .preview-source {
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.plotly-hover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.plotly-hover-actions button {
+  font-size: 0.74rem;
+  padding: 0.3rem 0.4rem;
+}
+
 .content-grid {
   margin-top: 0.9rem;
   display: grid;

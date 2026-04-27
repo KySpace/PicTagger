@@ -131,8 +131,9 @@ export function renderPlotlyScatter(
     });
     element.on("plotly_hover", (event) => {
       const id = event?.points?.[0]?.customdata?.[0];
+      const pairIndex = event?.points?.[0]?.customdata?.[1];
       if (id) {
-        element.__pictaggerOnHover(id);
+        element.__pictaggerOnHover(`${id}:${pairIndex ?? 0}`);
       }
     });
     element.on("plotly_unhover", () => {

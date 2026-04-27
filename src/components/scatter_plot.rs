@@ -153,6 +153,7 @@ pub fn ScatterPlot(
     let y_axis_type = RwSignal::new(initial_axis_state.y_axis_type);
     let axis_error = RwSignal::new(String::new());
     let plot_ref = NodeRef::<leptos::html::Div>::new();
+    let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
 
     Effect::new(move |_| {
         let state = StoredAxisState {
@@ -232,6 +233,20 @@ pub fn ScatterPlot(
         )
     });
 
+    let hovered_preview = Memo::new(move |_| {
+        hovered_pair.get().and_then(|(id, pair_index)| {
+            images
+                .get()
+                .into_iter()
+                .find(|item| item.id == id)
+                .and_then(|item| {
+                    item.freq_weight_pairs
+                        .get(pair_index)
+                        .map(|pair| (item.clone(), pair_index, pair.frequency, pair.weight))
+                })
+        })
+    });
+
     Effect::new(move |_| {
         let Some(element) = plot_ref.get() else {
             return;
@@ -253,13 +268,19 @@ pub fn ScatterPlot(
                 on_select.run(id);
             }
         }) as Box<dyn Fn(String)>);
-        let hover_callback = Closure::wrap(Box::new(move |raw_id: String| {
-            if let Ok(id) = Uuid::parse_str(&raw_id) {
+        let hover_callback = Closure::wrap(Box::new(move |raw_key: String| {
+            let (raw_id, raw_pair_index) = raw_key.split_once(':').unwrap_or((&raw_key, "0"));
+            if let Ok(id) = Uuid::parse_str(raw_id) {
                 hover_id.set(Some(id));
+                hovered_pair.set(Some((
+                    id,
+                    raw_pair_index.parse::<usize>().unwrap_or_default(),
+                )));
             }
         }) as Box<dyn Fn(String)>);
         let unhover_callback = Closure::wrap(Box::new(move || {
             hover_id.set(None);
+            hovered_pair.set(None);
         }) as Box<dyn Fn()>);
 
         render_plotly_scatter(
@@ -420,6 +441,40 @@ pub fn ScatterPlot(
             <div class="scatter-wrap">
                 <div node_ref=plot_ref class="plotly-scatter"></div>
             </div>
+            {move || {
+                hovered_preview
+                    .get()
+                    .map(|(item, pair_index, frequency, weight)| {
+                        let id = item.id;
+                        view! {
+                            <div class="plotly-hover-preview">
+                                <img src=item.image_data alt="hover preview" />
+                                <div class="plotly-hover-meta">
+                                    <p class="preview-source">{item.source}</p>
+                                    <p>{format!("source_tag: {}", item.source_tag)}</p>
+                                    <p>{format!("tag: {}", if item.tag.is_empty() { "No tag" } else { &item.tag })}</p>
+                                    <p>{format!("pair {}: IB {:.3}", pair_index + 1, item.ib)}</p>
+                                    <p>{format!(
+                                        "frequency: {}",
+                                        frequency
+                                            .map(|v| format!("{v:.6}"))
+                                            .unwrap_or_else(|| "inactive".to_string())
+                                    )}</p>
+                                    <p>{format!(
+                                        "weight: {}",
+                                        weight
+                                            .map(|v| format!("{v:.6}"))
+                                            .unwrap_or_else(|| "none".to_string())
+                                    )}</p>
+                                    <div class="plotly-hover-actions">
+                                        <button on:click=move |_| on_jump.run(id)>"Jump To List"</button>
+                                        <button on:click=move |_| on_select.run(id)>"Open Details"</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    })
+            }}
         </section>
     }
 }
