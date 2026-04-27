@@ -123,26 +123,39 @@ fn parse_f64_opt(raw: &str) -> Option<f64> {
 }
 
 fn plotly_color_from_hue(hue: f64) -> String {
-    let chroma = 0.64;
-    let lightness = 0.56;
-    let h = hue.rem_euclid(360.0) / 60.0;
-    let x = chroma * (1.0 - (h.rem_euclid(2.0) - 1.0).abs());
-    let (r1, g1, b1) = match h as i32 {
-        0 => (chroma, x, 0.0),
-        1 => (x, chroma, 0.0),
-        2 => (0.0, chroma, x),
-        3 => (0.0, x, chroma),
-        4 => (x, 0.0, chroma),
-        _ => (chroma, 0.0, x),
+    let lightness = 0.72;
+    let chroma = 0.16;
+    let radians = hue.rem_euclid(360.0).to_radians();
+    let a = chroma * radians.cos();
+    let b = chroma * radians.sin();
+
+    let l = lightness + 0.3963377774 * a + 0.2158037573 * b;
+    let m = lightness - 0.1055613458 * a - 0.0638541728 * b;
+    let s = lightness - 0.0894841775 * a - 1.2914855480 * b;
+
+    let l = l * l * l;
+    let m = m * m * m;
+    let s = s * s * s;
+
+    let r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    let b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+
+    let to_srgb_channel = |value: f64| {
+        let value = value.clamp(0.0, 1.0);
+        let encoded = if value <= 0.0031308 {
+            12.92 * value
+        } else {
+            1.055 * value.powf(1.0 / 2.4) - 0.055
+        };
+        (encoded.clamp(0.0, 1.0) * 255.0).round() as u8
     };
-    let m = lightness - chroma / 2.0;
-    let to_channel = |value: f64| ((value + m).clamp(0.0, 1.0) * 255.0).round() as u8;
 
     format!(
         "#{:02x}{:02x}{:02x}",
-        to_channel(r1),
-        to_channel(g1),
-        to_channel(b1)
+        to_srgb_channel(r),
+        to_srgb_channel(g),
+        to_srgb_channel(b)
     )
 }
 
