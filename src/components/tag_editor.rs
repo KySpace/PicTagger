@@ -1,9 +1,9 @@
 use leptos::prelude::*;
 
-use crate::models::{MAX_TAGS, TagDefinition, oklch_from_hue};
+use crate::models::{ImageRecord, MAX_TAGS, TagDefinition, oklch_from_hue};
 
 #[component]
-pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>) -> impl IntoView {
+pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>, images: RwSignal<Vec<ImageRecord>>) -> impl IntoView {
     let new_tag_name = RwSignal::new(String::new());
     let new_tag_hue = RwSignal::new("15".to_string());
 
@@ -64,6 +64,7 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>) -> impl IntoView {
                     children=move |tag| {
                         let name_for_hue = tag.name.clone();
                         let name_for_delete = tag.name.clone();
+                        let name_for_rename = tag.name.clone();
                         view! {
                             <article class="tag-row">
                                 <span
@@ -71,7 +72,38 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>) -> impl IntoView {
                                     style=format!("background:{};", oklch_from_hue(tag.hue))
                                     title=move || format!("OKLCH hue {:.1}", tag.hue)
                                 ></span>
-                                <p class="tag-name">{tag.name.clone()}</p>
+                                <label>
+                                    "Name"
+                                    <input
+                                        type="text"
+                                        prop:value=tag.name.clone()
+                                        on:change=move |ev| {
+                                            let next = event_target_value(&ev).trim().to_string();
+                                            if next.is_empty() || next == name_for_rename {
+                                                return;
+                                            }
+                                            let mut renamed = false;
+                                            tags.update(|list| {
+                                                if list.iter().any(|t| t.name == next) {
+                                                    return;
+                                                }
+                                                if let Some(found) = list.iter_mut().find(|t| t.name == name_for_rename) {
+                                                    found.name = next.clone();
+                                                    renamed = true;
+                                                }
+                                            });
+                                            if renamed {
+                                                images.update(|items| {
+                                                    for item in items.iter_mut() {
+                                                        if item.tag == name_for_rename {
+                                                            item.tag = next.clone();
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    />
+                                </label>
                                 <label>
                                     "Hue"
                                     <input

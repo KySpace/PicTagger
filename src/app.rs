@@ -342,7 +342,7 @@ pub fn App() -> impl IntoView {
                             .into_any()
                     } else {
                         view! {
-                            <TagEditor tags=tags />
+                            <TagEditor tags=tags images=images />
                         }
                             .into_any()
                     }
