@@ -4,10 +4,6 @@ use uuid::Uuid;
 
 use crate::models::{ImageRecord, TagDefinition, oklch_from_hue};
 
-fn fallback_item() -> ImageRecord {
-    ImageRecord::new(String::new(), String::new())
-}
-
 #[component]
 pub fn GalleryList(
     images: Memo<Vec<ImageRecord>>,
@@ -35,24 +31,31 @@ pub fn GalleryList(
                     key=|item| (item.id, item.updated_at)
                     children=move |item| {
                         let id = item.id;
-                        let current_item = move || {
-                            images
-                                .get()
-                                .into_iter()
-                                .find(|candidate| candidate.id == id)
-                                .unwrap_or_else(fallback_item)
-                        };
-                        let has_frequency = move || {
-                            current_item()
-                                .freq_weight_pairs
-                                .iter()
-                                .any(|pair| pair.frequency.is_some())
-                        };
-                        let tag_color = move || {
-                            let item_tag = current_item().tag;
+                        let image_data = item.image_data;
+                        let source = item.source;
+                        let source_tag = item.source_tag;
+                        let tag = item.tag;
+                        let ib = item.ib;
+                        let index = item.index;
+                        let active_pair_count = item
+                            .freq_weight_pairs
+                            .iter()
+                            .filter(|pair| pair.frequency.is_some())
+                            .count();
+                        let has_frequency = active_pair_count > 0;
+                        let tag_for_style = tag.clone();
+                        let card_tag_color = move || {
                             tag_color_map
                                 .get()
-                                .get(&item_tag)
+                                .get(&tag_for_style)
+                                .cloned()
+                                .unwrap_or_else(|| "transparent".to_string())
+                        };
+                        let tag_for_swatch = tag.clone();
+                        let swatch_tag_color = move || {
+                            tag_color_map
+                                .get()
+                                .get(&tag_for_swatch)
                                 .cloned()
                                 .unwrap_or_else(|| "transparent".to_string())
                         };
@@ -62,37 +65,30 @@ pub fn GalleryList(
                                 id=format!("gallery-item-{id}")
                                 class=move || {
                                     let mut class_name = if is_selected() { "gallery-item selected" } else { "gallery-item" }.to_string();
-                                    if !has_frequency() {
+                                    if !has_frequency {
                                         class_name.push_str(" no-frequency");
                                     }
                                     class_name
                                 }
                                 style=move || {
-                                    if has_frequency() {
-                                        format!("--item-tag-color: {};", tag_color())
+                                    if has_frequency {
+                                        format!("--item-tag-color: {};", card_tag_color())
                                     } else {
                                         "--item-tag-color: transparent;".to_string()
                                     }
                                 }
                                 on:click=move |_| on_select.run(id)
                             >
-                                <img src=move || current_item().image_data alt="gallery item" loading="lazy" />
+                                <img src=image_data alt="gallery item" loading="lazy" />
                                 <div class="gallery-meta">
-                                    <p class="source">{move || current_item().source}</p>
+                                    <p class="source">{source}</p>
                                     <p class="gallery-tag-line">
-                                        <span class="tag-color-swatch" style=move || format!("background:{};", tag_color())></span>
-                                        <span>{move || format!("tag: {}", current_item().tag)}</span>
+                                        <span class="tag-color-swatch" style=move || format!("background:{};", swatch_tag_color())></span>
+                                        <span>{format!("tag: {tag}")}</span>
                                     </p>
-                                    <p>{move || format!("source_tag: {}", current_item().source_tag)}</p>
-                                    <p>{move || {
-                                        let item = current_item();
-                                        format!(
-                                            "IB: {:.3}  pairs: {}",
-                                            item.ib,
-                                            item.freq_weight_pairs.iter().filter(|pair| pair.frequency.is_some()).count()
-                                        )
-                                    }}</p>
-                                    <p>{move || format!("index: {}", current_item().index)}</p>
+                                    <p>{format!("source_tag: {source_tag}")}</p>
+                                    <p>{format!("IB: {ib:.3}  pairs: {active_pair_count}")}</p>
+                                    <p>{format!("index: {index}")}</p>
                                 </div>
                             </article>
                         }

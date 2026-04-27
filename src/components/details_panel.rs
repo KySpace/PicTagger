@@ -12,8 +12,27 @@ pub fn DetailsPanel(
 ) -> impl IntoView {
     let show_preview_modal = RwSignal::new(false);
     let show_tag_menu = RwSignal::new(false);
+    let source_draft = RwSignal::new(String::new());
+    let source_tag_draft = RwSignal::new(String::new());
+    let ib_draft = RwSignal::new(String::new());
+    let index_draft = RwSignal::new(String::new());
     let selected_id = Memo::new(move |_| selected.get().map(|item| item.id));
     let has_selected = move || selected_id.get().is_some();
+
+    Effect::new(move |_| {
+        if let Some(item) = selected.get() {
+            source_draft.set(item.source);
+            source_tag_draft.set(item.source_tag);
+            ib_draft.set(item.ib.to_string());
+            index_draft.set(item.index.to_string());
+        } else {
+            source_draft.set(String::new());
+            source_tag_draft.set(String::new());
+            ib_draft.set(String::new());
+            index_draft.set(String::new());
+        }
+    });
+
     let tag_color_map = Memo::new(move |_| {
         tags.get()
             .into_iter()
@@ -114,20 +133,22 @@ pub fn DetailsPanel(
                                     "Source"
                                     <input
                                         type="text"
-                                        prop:value=move || {
-                                            selected.get().map(|item| item.source).unwrap_or_default()
+                                        prop:value=move || source_draft.get()
+                                        on:input=move |ev| source_draft.set(event_target_value(&ev))
+                                        on:change=move |_| {
+                                            on_update.run(("source".to_string(), source_draft.get()));
                                         }
-                                        on:input=move |ev| on_update.run(("source".to_string(), event_target_value(&ev)))
                                     />
                                 </label>
                                 <label>
                                     "Source Tag"
                                     <input
                                         type="text"
-                                        prop:value=move || {
-                                            selected.get().map(|item| item.source_tag).unwrap_or_default()
+                                        prop:value=move || source_tag_draft.get()
+                                        on:input=move |ev| source_tag_draft.set(event_target_value(&ev))
+                                        on:change=move |_| {
+                                            on_update.run(("source_tag".to_string(), source_tag_draft.get()));
                                         }
-                                        on:input=move |ev| on_update.run(("source_tag".to_string(), event_target_value(&ev)))
                                     />
                                 </label>
                                 <label>
@@ -135,13 +156,11 @@ pub fn DetailsPanel(
                                     <input
                                         type="text"
                                         inputmode="decimal"
-                                        prop:value=move || {
-                                            selected
-                                                .get()
-                                                .map(|item| item.ib.to_string())
-                                                .unwrap_or_default()
+                                        prop:value=move || ib_draft.get()
+                                        on:input=move |ev| ib_draft.set(event_target_value(&ev))
+                                        on:change=move |_| {
+                                            on_update.run(("ib".to_string(), ib_draft.get()));
                                         }
-                                        on:input=move |ev| on_update.run(("ib".to_string(), event_target_value(&ev)))
                                     />
                                 </label>
                                 <label>
@@ -149,13 +168,11 @@ pub fn DetailsPanel(
                                     <input
                                         type="text"
                                         inputmode="numeric"
-                                        prop:value=move || {
-                                            selected
-                                                .get()
-                                                .map(|item| item.index.to_string())
-                                                .unwrap_or_default()
+                                        prop:value=move || index_draft.get()
+                                        on:input=move |ev| index_draft.set(event_target_value(&ev))
+                                        on:change=move |_| {
+                                            on_update.run(("index".to_string(), index_draft.get()));
                                         }
-                                        on:input=move |ev| on_update.run(("index".to_string(), event_target_value(&ev)))
                                     />
                                 </label>
                                 <label>

@@ -1,8 +1,11 @@
 use gloo_file::futures::{read_as_bytes, read_as_data_url, read_as_text};
+use js_sys::{Array, Uint8Array};
 use leptos::ev;
 use leptos::prelude::*;
-use js_sys::{Array, Uint8Array};
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::rc::Rc;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{
@@ -139,8 +142,34 @@ pub fn App() -> impl IntoView {
     let batch_ib = RwSignal::new(String::new());
     let active_top_tab = RwSignal::new("scatter".to_string());
 
+    let save_records_timer = Rc::new(Cell::new(None::<i32>));
     Effect::new(move |_| {
-        save_records(&images.get());
+        let records = images.get();
+        let Some(window) = web_sys::window() else {
+            save_records(&records);
+            return;
+        };
+
+        if let Some(handle) = save_records_timer.get() {
+            window.clear_timeout_with_handle(handle);
+        }
+
+        let timer = Rc::clone(&save_records_timer);
+        let callback = Closure::once(move || {
+            save_records(&records);
+            timer.set(None);
+        });
+
+        match window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            callback.as_ref().unchecked_ref(),
+            300,
+        ) {
+            Ok(handle) => {
+                save_records_timer.set(Some(handle));
+                callback.forget();
+            }
+            Err(_) => save_records(&images.get_untracked()),
+        }
     });
     Effect::new(move |_| {
         save_tags(&tags.get());
