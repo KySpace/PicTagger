@@ -52,7 +52,7 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>, images: RwSignal<Vec<ImageR
                         on:input=move |ev| new_tag_hue.set(event_target_value(&ev))
                     />
                 </label>
-                <button on:click=add_tag disabled=move || tags.get().len() >= MAX_TAGS>
+                <button on:click=add_tag disabled=move || { tags.get().len() >= MAX_TAGS }>
                     "Add Tag"
                 </button>
             </div>
@@ -62,15 +62,26 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>, images: RwSignal<Vec<ImageR
                     each=move || tags.get()
                     key=|t| t.name.clone()
                     children=move |tag| {
-                        let name_for_hue = tag.name.clone();
+                        let name_for_swatch = tag.name.clone();
+                        let name_for_title = tag.name.clone();
+                        let name_for_hue_value = tag.name.clone();
+                        let name_for_hue_update = tag.name.clone();
+                        let name_for_hue_text = tag.name.clone();
                         let name_for_delete = tag.name.clone();
                         let name_for_rename = tag.name.clone();
+                        let current_hue = move |name: &str| {
+                            tags.get()
+                                .into_iter()
+                                .find(|t| t.name == name)
+                                .map(|t| t.hue)
+                                .unwrap_or(tag.hue)
+                        };
                         view! {
                             <article class="tag-row">
                                 <span
                                     class="tag-chip"
-                                    style=format!("background:{};", oklch_from_hue(tag.hue))
-                                    title=move || format!("OKLCH hue {:.1}", tag.hue)
+                                    style=move || format!("background:{};", oklch_from_hue(current_hue(&name_for_swatch)))
+                                    title=move || format!("OKLCH hue {:.1}", current_hue(&name_for_title))
                                 ></span>
                                 <label>
                                     "Name"
@@ -111,11 +122,11 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>, images: RwSignal<Vec<ImageR
                                         min="0"
                                         max="360"
                                         step="1"
-                                        prop:value=tag.hue.to_string()
+                                        prop:value=move || current_hue(&name_for_hue_value).to_string()
                                         on:input=move |ev| {
                                             if let Ok(v) = event_target_value(&ev).parse::<f64>() {
                                                 tags.update(|list| {
-                                                    if let Some(found) = list.iter_mut().find(|t| t.name == name_for_hue) {
+                                                    if let Some(found) = list.iter_mut().find(|t| t.name == name_for_hue_update) {
                                                         found.hue = v.clamp(0.0, 360.0);
                                                     }
                                                 });
@@ -123,7 +134,7 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>, images: RwSignal<Vec<ImageR
                                         }
                                     />
                                 </label>
-                                <span class="hue-value">{format!("{:.0}", tag.hue)}</span>
+                                <span class="hue-value">{move || format!("{:.0}", current_hue(&name_for_hue_text))}</span>
                                 <button
                                     class="danger"
                                     on:click=move |_| {

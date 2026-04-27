@@ -76,7 +76,7 @@ pub struct TagDefinition {
     pub hue: f64,
 }
 
-pub const MAX_TAGS: usize = 10;
+pub const MAX_TAGS: usize = 24;
 
 pub fn default_tag_definitions() -> Vec<TagDefinition> {
     [15.0, 50.0, 85.0, 120.0, 155.0, 190.0, 225.0, 260.0, 295.0, 330.0]
