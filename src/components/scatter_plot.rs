@@ -1,23 +1,78 @@
+use js_sys::Function;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
 
-use crate::models::{ImageRecord, TagDefinition, oklch_from_hue};
+use crate::models::{ImageRecord, TagDefinition};
 
-const WIDTH: f64 = 900.0;
-const HEIGHT: f64 = 280.0;
-const PAD_X: f64 = 46.0;
-const PAD_Y: f64 = 24.0;
 const AXIS_LIMITS_STORAGE_KEY: &str = "pictagger.scatter.axis_limits.v1";
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[wasm_bindgen(module = "/src/plotly_bridge.js")]
+extern "C" {
+    #[wasm_bindgen(js_name = renderPlotlyScatter)]
+    fn render_plotly_scatter(
+        element: &web_sys::Element,
+        payload_json: &str,
+        on_select: &Function,
+        on_hover: &Function,
+        on_unhover: &Function,
+    );
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 struct StoredAxisState {
     x_min_input: String,
     x_max_input: String,
     y_min_input: String,
     y_max_input: String,
     manual_limits: Option<[f64; 4]>,
+    #[serde(default = "linear_axis")]
+    x_axis_type: String,
+    #[serde(default = "linear_axis")]
+    y_axis_type: String,
+}
+
+impl Default for StoredAxisState {
+    fn default() -> Self {
+        Self {
+            x_min_input: String::new(),
+            x_max_input: String::new(),
+            y_min_input: String::new(),
+            y_max_input: String::new(),
+            manual_limits: None,
+            x_axis_type: linear_axis(),
+            y_axis_type: linear_axis(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct PlotPayload {
+    points: Vec<PlotPoint>,
+    selected_id: Option<String>,
+    manual_limits: Option<[f64; 4]>,
+    x_axis_type: String,
+    y_axis_type: String,
+}
+
+#[derive(Clone, PartialEq, Serialize)]
+struct PlotPoint {
+    id: String,
+    pair_index: usize,
+    ib: f64,
+    frequency: f64,
+    weight: f64,
+    source: String,
+    source_tag: String,
+    tag: String,
+    color: String,
+}
+
+fn linear_axis() -> String {
+    "linear".to_string()
 }
 
 fn load_axis_state() -> StoredAxisState {
@@ -50,6 +105,30 @@ fn parse_f64_opt(raw: &str) -> Option<f64> {
     raw.trim().parse::<f64>().ok()
 }
 
+fn plotly_color_from_hue(hue: f64) -> String {
+    let chroma = 0.64;
+    let lightness = 0.56;
+    let h = hue.rem_euclid(360.0) / 60.0;
+    let x = chroma * (1.0 - (h.rem_euclid(2.0) - 1.0).abs());
+    let (r1, g1, b1) = match h as i32 {
+        0 => (chroma, x, 0.0),
+        1 => (x, chroma, 0.0),
+        2 => (0.0, chroma, x),
+        3 => (0.0, x, chroma),
+        4 => (x, 0.0, chroma),
+        _ => (chroma, 0.0, x),
+    };
+    let m = lightness - chroma / 2.0;
+    let to_channel = |value: f64| ((value + m).clamp(0.0, 1.0) * 255.0).round() as u8;
+
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        to_channel(r1),
+        to_channel(g1),
+        to_channel(b1)
+    )
+}
+
 #[component]
 pub fn ScatterPlot(
     images: Memo<Vec<ImageRecord>>,
@@ -59,7 +138,6 @@ pub fn ScatterPlot(
     on_select: Callback<Uuid>,
     on_jump: Callback<Uuid>,
 ) -> impl IntoView {
-    let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
     let initial_axis_state = load_axis_state();
     let show_axis_menu = RwSignal::new(false);
     let x_min_input = RwSignal::new(initial_axis_state.x_min_input);
@@ -71,7 +149,10 @@ pub fn ScatterPlot(
             .manual_limits
             .map(|v| (v[0], v[1], v[2], v[3])),
     );
+    let x_axis_type = RwSignal::new(initial_axis_state.x_axis_type);
+    let y_axis_type = RwSignal::new(initial_axis_state.y_axis_type);
     let axis_error = RwSignal::new(String::new());
+    let plot_ref = NodeRef::<leptos::html::Div>::new();
 
     Effect::new(move |_| {
         let state = StoredAxisState {
@@ -80,28 +161,43 @@ pub fn ScatterPlot(
             y_min_input: y_min_input.get(),
             y_max_input: y_max_input.get(),
             manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
+            x_axis_type: x_axis_type.get(),
+            y_axis_type: y_axis_type.get(),
         };
         save_axis_state(&state);
     });
 
+    let tag_color_map = Memo::new(move |_| {
+        tags.get()
+            .into_iter()
+            .map(|t| (t.name, plotly_color_from_hue(t.hue)))
+            .collect::<HashMap<_, _>>()
+    });
+
     let plot_points = Memo::new(move |_| {
+        let colors = tag_color_map.get();
         images
             .get()
             .into_iter()
             .flat_map(|item| {
+                let color = colors
+                    .get(&item.tag)
+                    .cloned()
+                    .unwrap_or_else(|| "#95a0ad".to_string());
                 item.freq_weight_pairs
                     .iter()
                     .enumerate()
                     .filter_map(|(pair_index, pair)| {
-                        pair.frequency.map(|frequency| {
-                            (
-                                item.id,
-                                pair_index,
-                                item.ib,
-                                frequency,
-                                pair.weight.unwrap_or(0.0),
-                                item.tag.clone(),
-                            )
+                        pair.frequency.map(|frequency| PlotPoint {
+                            id: item.id.to_string(),
+                            pair_index,
+                            ib: item.ib,
+                            frequency,
+                            weight: pair.weight.unwrap_or(0.0),
+                            source: item.source.clone(),
+                            source_tag: item.source_tag.clone(),
+                            tag: item.tag.clone(),
+                            color: color.clone(),
                         })
                     })
                     .collect::<Vec<_>>()
@@ -112,25 +208,20 @@ pub fn ScatterPlot(
     let auto_extents = Memo::new(move |_| {
         let points = plot_points.get();
         if points.is_empty() {
-            return (0.0, 1.0, 0.0, 1.0, 0.0, 1.0);
+            return (0.0, 1.0, 0.0, 1.0);
         }
-        let min_ib = points.iter().map(|x| x.2).fold(f64::INFINITY, f64::min);
-        let max_ib = points.iter().map(|x| x.2).fold(f64::NEG_INFINITY, f64::max);
+        let min_ib = points.iter().map(|x| x.ib).fold(f64::INFINITY, f64::min);
+        let max_ib = points
+            .iter()
+            .map(|x| x.ib)
+            .fold(f64::NEG_INFINITY, f64::max);
         let min_f = points
             .iter()
-            .map(|x| x.3)
+            .map(|x| x.frequency)
             .fold(f64::INFINITY, f64::min);
         let max_f = points
             .iter()
-            .map(|x| x.3)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let min_w = points
-            .iter()
-            .map(|x| x.4)
-            .fold(f64::INFINITY, f64::min);
-        let max_w = points
-            .iter()
-            .map(|x| x.4)
+            .map(|x| x.frequency)
             .fold(f64::NEG_INFINITY, f64::max);
 
         (
@@ -138,61 +229,54 @@ pub fn ScatterPlot(
             if min_ib == max_ib { min_ib + 1.0 } else { max_ib },
             min_f,
             if min_f == max_f { min_f + 1.0 } else { max_f },
-            min_w,
-            if min_w == max_w { min_w + 1.0 } else { max_w },
         )
     });
 
-    let extents = Memo::new(move |_| {
-        let (auto_x_min, auto_x_max, auto_y_min, auto_y_max, min_w, max_w) = auto_extents.get();
-        if let Some((x_min, x_max, y_min, y_max)) = manual_limits.get() {
-            (x_min, x_max, y_min, y_max, min_w, max_w)
-        } else {
-            (auto_x_min, auto_x_max, auto_y_min, auto_y_max, min_w, max_w)
-        }
-    });
+    Effect::new(move |_| {
+        let Some(element) = plot_ref.get() else {
+            return;
+        };
 
-    let project_x = move |ib: f64| {
-        let (min_ib, max_ib, _, _, _, _) = extents.get();
-        PAD_X + (ib - min_ib) / (max_ib - min_ib) * (WIDTH - PAD_X * 2.0)
-    };
+        let payload = PlotPayload {
+            points: plot_points.get(),
+            selected_id: selected_id.get().map(|id| id.to_string()),
+            manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
+            x_axis_type: x_axis_type.get(),
+            y_axis_type: y_axis_type.get(),
+        };
+        let Ok(payload_json) = serde_json::to_string(&payload) else {
+            return;
+        };
 
-    let project_y = move |freq: f64| {
-        let (_, _, min_f, max_f, _, _) = extents.get();
-        HEIGHT - PAD_Y - (freq - min_f) / (max_f - min_f) * (HEIGHT - PAD_Y * 2.0)
-    };
+        let select_callback = Closure::wrap(Box::new(move |raw_id: String| {
+            if let Ok(id) = Uuid::parse_str(&raw_id) {
+                on_select.run(id);
+            }
+        }) as Box<dyn Fn(String)>);
+        let hover_callback = Closure::wrap(Box::new(move |raw_id: String| {
+            if let Ok(id) = Uuid::parse_str(&raw_id) {
+                hover_id.set(Some(id));
+            }
+        }) as Box<dyn Fn(String)>);
+        let unhover_callback = Closure::wrap(Box::new(move || {
+            hover_id.set(None);
+        }) as Box<dyn Fn()>);
 
-    let project_opacity = move |weight: f64| {
-        let (_, _, _, _, min_w, max_w) = extents.get();
-        let normalized = ((weight - min_w) / (max_w - min_w)).clamp(0.0, 1.0);
-        0.2 + normalized * 0.8
-    };
+        render_plotly_scatter(
+            element.as_ref(),
+            &payload_json,
+            select_callback.as_ref().unchecked_ref(),
+            hover_callback.as_ref().unchecked_ref(),
+            unhover_callback.as_ref().unchecked_ref(),
+        );
 
-    let hovered = Memo::new(move |_| {
-        hovered_pair.get().and_then(|(id, pair_index)| {
-            images
-                .get()
-                .into_iter()
-                .find(|x| x.id == id)
-                .and_then(|item| {
-                    let pair_values = item
-                        .freq_weight_pairs
-                        .get(pair_index)
-                        .and_then(|pair| pair.frequency.map(|frequency| (frequency, pair.weight.unwrap_or(0.0))));
-                    pair_values.map(|(frequency, weight)| (item, pair_index, frequency, weight))
-                })
-        })
-    });
-
-    let tag_color_map = Memo::new(move |_| {
-        tags.get()
-            .into_iter()
-            .map(|t| (t.name, oklch_from_hue(t.hue)))
-            .collect::<HashMap<_, _>>()
+        select_callback.forget();
+        hover_callback.forget();
+        unhover_callback.forget();
     });
 
     let apply_axis_limits = move |_| {
-        let (auto_x_min, auto_x_max, auto_y_min, auto_y_max, _, _) = auto_extents.get();
+        let (auto_x_min, auto_x_max, auto_y_min, auto_y_max) = auto_extents.get();
 
         let x_min_raw = x_min_input.get();
         let x_max_raw = x_max_input.get();
@@ -248,7 +332,38 @@ pub fn ScatterPlot(
         <section class="scatter-panel">
             <div class="scatter-header">
                 <h2>"Scattering Plot (frequency vs IB)"</h2>
-                <button on:click=move |_| show_axis_menu.update(|v| *v = !*v)>"Axis Limits"</button>
+                <div class="scatter-controls">
+                    <label>
+                        "X Scale"
+                        <select
+                            prop:value=move || x_axis_type.get()
+                            on:change=move |ev| x_axis_type.set(event_target_value(&ev))
+                        >
+                            <option value="linear">"Linear"</option>
+                            <option value="log">"Log"</option>
+                        </select>
+                    </label>
+                    <label>
+                        "Y Scale"
+                        <select
+                            prop:value=move || y_axis_type.get()
+                            on:change=move |ev| y_axis_type.set(event_target_value(&ev))
+                        >
+                            <option value="linear">"Linear"</option>
+                            <option value="log">"Log"</option>
+                        </select>
+                    </label>
+                    <button
+                        on:click=move |_| {
+                            if let Some(id) = selected_id.get() {
+                                on_jump.run(id);
+                            }
+                        }
+                    >
+                        "Jump Selected"
+                    </button>
+                    <button on:click=move |_| show_axis_menu.update(|v| *v = !*v)>"Axis Limits"</button>
+                </div>
             </div>
             {move || {
                 if show_axis_menu.get() {
@@ -303,120 +418,7 @@ pub fn ScatterPlot(
                 }
             }}
             <div class="scatter-wrap">
-                <div
-                    class="scatter-hit-area"
-                    on:mouseleave=move |_| {
-                        hover_id.set(None);
-                        hovered_pair.set(None);
-                    }
-                >
-                <svg viewBox=format!("0 0 {} {}", WIDTH, HEIGHT) class="scatter-svg">
-                    <line x1=PAD_X y1=HEIGHT-PAD_Y x2=WIDTH-PAD_X y2=HEIGHT-PAD_Y class="axis" />
-                    <line x1=PAD_X y1=PAD_Y x2=PAD_X y2=HEIGHT-PAD_Y class="axis" />
-                    <text x=WIDTH/2.0 y=HEIGHT-4.0 class="axis-label">"IB"</text>
-                    <text x=6 y=14 class="axis-label">"frequency"</text>
-                    {move || {
-                        let (min_x, max_x, _, _, _, _) = extents.get();
-                        (0..=4)
-                            .map(|i| {
-                                let t = i as f64 / 4.0;
-                                let x = PAD_X + t * (WIDTH - PAD_X * 2.0);
-                                let value = min_x + t * (max_x - min_x);
-                                view! {
-                                    <>
-                                        <line
-                                            x1=x
-                                            y1=HEIGHT-PAD_Y
-                                            x2=x
-                                            y2=HEIGHT-PAD_Y+4.0
-                                            class="tick-line"
-                                        />
-                                        <text x=x y=HEIGHT-PAD_Y+16.0 class="tick-label">{format!("{value:.2}")}</text>
-                                    </>
-                                }
-                            })
-                            .collect_view()
-                    }}
-                    {move || {
-                        let (_, _, min_y, max_y, _, _) = extents.get();
-                        (0..=4)
-                            .map(|i| {
-                                let t = i as f64 / 4.0;
-                                let y = HEIGHT - PAD_Y - t * (HEIGHT - PAD_Y * 2.0);
-                                let value = min_y + t * (max_y - min_y);
-                                view! {
-                                    <>
-                                        <line
-                                            x1=PAD_X-4.0
-                                            y1=y
-                                            x2=PAD_X
-                                            y2=y
-                                            class="tick-line"
-                                        />
-                                        <text x=PAD_X-8.0 y=y+3.0 class="tick-label y-tick">{format!("{value:.2}")}</text>
-                                    </>
-                                }
-                            })
-                            .collect_view()
-                    }}
-
-                    <For
-                        each=move || plot_points.get()
-                        key=|(id, pair_index, _, _, _, _)| (*id, *pair_index)
-                        children=move |(id, pair_index, ib, freq, weight, item_tag)| {
-                            view! {
-                                <circle
-                                    cx=move || project_x(ib)
-                                    cy=move || project_y(freq)
-                                    r=5
-                                    style=move || {
-                                        let fill = tag_color_map
-                                            .get()
-                                            .get(&item_tag)
-                                            .cloned()
-                                            .unwrap_or_else(|| "oklch(0.70 0.02 260)".to_string());
-                                        format!("opacity: {:.3}; fill: {};", project_opacity(weight), fill)
-                                    }
-                                    class=move || {
-                                        if selected_id.get() == Some(id) { "dot selected" } else { "dot" }
-                                    }
-                                    on:mouseover=move |_| {
-                                        hover_id.set(Some(id));
-                                        hovered_pair.set(Some((id, pair_index)));
-                                    }
-                                    on:click=move |_| on_select.run(id)
-                                />
-                            }
-                        }
-                    />
-                </svg>
-
-                {move || hovered.get().map(|(item, pair_index, frequency, weight)| {
-                    let ib = item.ib;
-                    let id = item.id;
-                    view! {
-                        <div
-                            class="hover-card"
-                            style=move || {
-                                format!(
-                                    "left:{}px; top:{}px;",
-                                    project_x(ib) + 10.0,
-                                    project_y(frequency) + 10.0
-                                )
-                            }
-                        >
-                            <img src=item.image_data alt="hover preview" />
-                            <p>{item.source.clone()}</p>
-                            <p>{format!("tag: {}", item.tag)}</p>
-                            <p>{format!("pair {}: IB {:.3}, freq {:.3}, weight {:.3}", pair_index + 1, item.ib, frequency, weight)}</p>
-                            <div class="hover-actions">
-                                <button on:click=move |_| on_jump.run(id)>"Jump To List"</button>
-                                <button on:click=move |_| on_select.run(id)>"Open Details"</button>
-                            </div>
-                        </div>
-                    }
-                })}
-                </div>
+                <div node_ref=plot_ref class="plotly-scatter"></div>
             </div>
         </section>
     }
