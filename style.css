@@ -301,6 +301,7 @@ input {
   grid-template-columns: 132px 1fr;
   gap: 0.6rem;
   border: 1px solid var(--line);
+  border-left: 5px solid var(--item-tag-color, transparent);
   border-radius: 9px;
   padding: 0.4rem;
   cursor: pointer;
@@ -317,6 +318,14 @@ input {
   object-fit: contain;
   background: #eef2ea;
   border-radius: 8px;
+}
+
+.gallery-item.no-frequency {
+  opacity: 0.62;
+}
+
+.gallery-item.no-frequency img {
+  filter: grayscale(1);
 }
 
 .gallery-meta p {
@@ -345,6 +354,22 @@ input {
   object-fit: contain;
   background: #eef2ea;
   border-radius: 8px;
+}
+
+.pair-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pair-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.pair-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .details-empty {

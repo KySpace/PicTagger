@@ -11,7 +11,7 @@ use crate::components::filter_bar::IbFilterBar;
 use crate::components::gallery_list::GalleryList;
 use crate::components::scatter_plot::ScatterPlot;
 use crate::components::tag_editor::TagEditor;
-use crate::models::{ImageRecord, default_tag_definitions, now_millis};
+use crate::models::{FrequencyWeightPair, ImageRecord, default_frequency_weight_pairs, default_tag_definitions, now_millis};
 use crate::storage::{clear_records, load_records, load_tags, save_records, save_tags};
 use uuid::Uuid;
 
@@ -156,14 +156,22 @@ pub fn App() -> impl IntoView {
         input.set_value("");
     };
 
-    let update_selected = move |field: &'static str, value: String| {
+    let update_selected = move |field: String, value: String| {
         let Some(id) = selected_id.get() else {
             return;
         };
         images.update(|list| {
             if let Some(item) = list.iter_mut().find(|x| x.id == id) {
                 let mut changed = false;
-                match field {
+                match field.as_str() {
+                    "add_pair" => {
+                        item.freq_weight_pairs.push(FrequencyWeightPair::blank());
+                        changed = true;
+                    }
+                    "clear_pairs" => {
+                        item.freq_weight_pairs = default_frequency_weight_pairs();
+                        changed = true;
+                    }
                     "tag" => {
                         if item.tag != value {
                             item.tag = value;
@@ -211,6 +219,36 @@ pub fn App() -> impl IntoView {
                             if (item.weight - v).abs() > f64::EPSILON {
                                 item.weight = v;
                                 changed = true;
+                            }
+                        }
+                    }
+                    _ if field.starts_with("pair_frequency:") => {
+                        if let Ok(index) = field["pair_frequency:".len()..].parse::<usize>() {
+                            if let Some(pair) = item.freq_weight_pairs.get_mut(index) {
+                                let next = if value.trim().is_empty() {
+                                    None
+                                } else {
+                                    value.trim().parse::<f64>().ok()
+                                };
+                                if pair.frequency != next {
+                                    pair.frequency = next;
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                    _ if field.starts_with("pair_weight:") => {
+                        if let Ok(index) = field["pair_weight:".len()..].parse::<usize>() {
+                            if let Some(pair) = item.freq_weight_pairs.get_mut(index) {
+                                let next = if value.trim().is_empty() {
+                                    None
+                                } else {
+                                    value.trim().parse::<f64>().ok()
+                                };
+                                if pair.weight != next {
+                                    pair.weight = next;
+                                    changed = true;
+                                }
                             }
                         }
                     }
@@ -352,6 +390,7 @@ pub fn App() -> impl IntoView {
             <section class="content-grid">
                 <GalleryList
                     images=filtered_images
+                    tags=tags_memo
                     selected_id=selected_id
                     on_select=Callback::new(move |id| selected_id.set(Some(id)))
                     on_request_delete_all=Callback::new(move |_| show_delete_all_modal.set(true))

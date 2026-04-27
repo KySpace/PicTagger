@@ -59,6 +59,7 @@ pub fn ScatterPlot(
     on_select: Callback<Uuid>,
     on_jump: Callback<Uuid>,
 ) -> impl IntoView {
+    let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
     let initial_axis_state = load_axis_state();
     let show_axis_menu = RwSignal::new(false);
     let x_min_input = RwSignal::new(initial_axis_state.x_min_input);
@@ -83,28 +84,53 @@ pub fn ScatterPlot(
         save_axis_state(&state);
     });
 
+    let plot_points = Memo::new(move |_| {
+        images
+            .get()
+            .into_iter()
+            .flat_map(|item| {
+                item.freq_weight_pairs
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(pair_index, pair)| {
+                        pair.frequency.map(|frequency| {
+                            (
+                                item.id,
+                                pair_index,
+                                item.ib,
+                                frequency,
+                                pair.weight.unwrap_or(0.0),
+                                item.tag.clone(),
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    });
+
     let auto_extents = Memo::new(move |_| {
-        let items = images.get();
-        if items.is_empty() {
+        let points = plot_points.get();
+        if points.is_empty() {
             return (0.0, 1.0, 0.0, 1.0, 0.0, 1.0);
         }
-        let min_ib = items.iter().map(|x| x.ib).fold(f64::INFINITY, f64::min);
-        let max_ib = items.iter().map(|x| x.ib).fold(f64::NEG_INFINITY, f64::max);
-        let min_f = items
+        let min_ib = points.iter().map(|x| x.2).fold(f64::INFINITY, f64::min);
+        let max_ib = points.iter().map(|x| x.2).fold(f64::NEG_INFINITY, f64::max);
+        let min_f = points
             .iter()
-            .map(|x| x.frequency)
+            .map(|x| x.3)
             .fold(f64::INFINITY, f64::min);
-        let max_f = items
+        let max_f = points
             .iter()
-            .map(|x| x.frequency)
+            .map(|x| x.3)
             .fold(f64::NEG_INFINITY, f64::max);
-        let min_w = items
+        let min_w = points
             .iter()
-            .map(|x| x.weight)
+            .map(|x| x.4)
             .fold(f64::INFINITY, f64::min);
-        let max_w = items
+        let max_w = points
             .iter()
-            .map(|x| x.weight)
+            .map(|x| x.4)
             .fold(f64::NEG_INFINITY, f64::max);
 
         (
@@ -143,9 +169,19 @@ pub fn ScatterPlot(
     };
 
     let hovered = Memo::new(move |_| {
-        hover_id
-            .get()
-            .and_then(|id| images.get().into_iter().find(|x| x.id == id))
+        hovered_pair.get().and_then(|(id, pair_index)| {
+            images
+                .get()
+                .into_iter()
+                .find(|x| x.id == id)
+                .and_then(|item| {
+                    let pair_values = item
+                        .freq_weight_pairs
+                        .get(pair_index)
+                        .and_then(|pair| pair.frequency.map(|frequency| (frequency, pair.weight.unwrap_or(0.0))));
+                    pair_values.map(|(frequency, weight)| (item, pair_index, frequency, weight))
+                })
+        })
     });
 
     let tag_color_map = Memo::new(move |_| {
@@ -269,7 +305,10 @@ pub fn ScatterPlot(
             <div class="scatter-wrap">
                 <div
                     class="scatter-hit-area"
-                    on:mouseleave=move |_| hover_id.set(None)
+                    on:mouseleave=move |_| {
+                        hover_id.set(None);
+                        hovered_pair.set(None);
+                    }
                 >
                 <svg viewBox=format!("0 0 {} {}", WIDTH, HEIGHT) class="scatter-svg">
                     <line x1=PAD_X y1=HEIGHT-PAD_Y x2=WIDTH-PAD_X y2=HEIGHT-PAD_Y class="axis" />
@@ -322,14 +361,9 @@ pub fn ScatterPlot(
                     }}
 
                     <For
-                        each=move || images.get()
-                        key=|item| item.id
-                        children=move |item| {
-                            let ib = item.ib;
-                            let freq = item.frequency;
-                            let weight = item.weight;
-                            let item_tag = item.tag.clone();
-                            let id = item.id;
+                        each=move || plot_points.get()
+                        key=|(id, pair_index, _, _, _, _)| (*id, *pair_index)
+                        children=move |(id, pair_index, ib, freq, weight, item_tag)| {
                             view! {
                                 <circle
                                     cx=move || project_x(ib)
@@ -346,7 +380,10 @@ pub fn ScatterPlot(
                                     class=move || {
                                         if selected_id.get() == Some(id) { "dot selected" } else { "dot" }
                                     }
-                                    on:mouseover=move |_| hover_id.set(Some(id))
+                                    on:mouseover=move |_| {
+                                        hover_id.set(Some(id));
+                                        hovered_pair.set(Some((id, pair_index)));
+                                    }
                                     on:click=move |_| on_select.run(id)
                                 />
                             }
@@ -354,9 +391,8 @@ pub fn ScatterPlot(
                     />
                 </svg>
 
-                {move || hovered.get().map(|item| {
+                {move || hovered.get().map(|(item, pair_index, frequency, weight)| {
                     let ib = item.ib;
-                    let freq = item.frequency;
                     let id = item.id;
                     view! {
                         <div
@@ -365,14 +401,14 @@ pub fn ScatterPlot(
                                 format!(
                                     "left:{}px; top:{}px;",
                                     project_x(ib) + 10.0,
-                                    project_y(freq) + 10.0
+                                    project_y(frequency) + 10.0
                                 )
                             }
                         >
                             <img src=item.image_data alt="hover preview" />
                             <p>{item.source.clone()}</p>
                             <p>{format!("tag: {}", item.tag)}</p>
-                            <p>{format!("IB: {:.3}, freq: {:.3}", item.ib, item.frequency)}</p>
+                            <p>{format!("pair {}: IB {:.3}, freq {:.3}, weight {:.3}", pair_index + 1, item.ib, frequency, weight)}</p>
                             <div class="hover-actions">
                                 <button on:click=move |_| on_jump.run(id)>"Jump To List"</button>
                                 <button on:click=move |_| on_select.run(id)>"Open Details"</button>

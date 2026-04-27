@@ -6,7 +6,7 @@ use crate::models::{ImageRecord, TagDefinition};
 pub fn DetailsPanel(
     selected: Memo<Option<ImageRecord>>,
     tags: Memo<Vec<TagDefinition>>,
-    on_update: Callback<(&'static str, String)>,
+    on_update: Callback<(String, String)>,
     on_delete: Callback<()>,
 ) -> impl IntoView {
     let show_preview_modal = RwSignal::new(false);
@@ -38,7 +38,7 @@ pub fn DetailsPanel(
                                     prop:value=move || {
                                         selected.get().map(|item| item.tag).unwrap_or_default()
                                     }
-                                    on:input=move |ev| on_update.run(("tag", event_target_value(&ev)))
+                                    on:input=move |ev| on_update.run(("tag".to_string(), event_target_value(&ev)))
                                 />
                                 <datalist id="tag-options">
                                     <For
@@ -55,7 +55,7 @@ pub fn DetailsPanel(
                                     prop:value=move || {
                                         selected.get().map(|item| item.source).unwrap_or_default()
                                     }
-                                    on:input=move |ev| on_update.run(("source", event_target_value(&ev)))
+                                    on:input=move |ev| on_update.run(("source".to_string(), event_target_value(&ev)))
                                 />
                             </label>
                             <label>
@@ -65,7 +65,7 @@ pub fn DetailsPanel(
                                     prop:value=move || {
                                         selected.get().map(|item| item.source_tag).unwrap_or_default()
                                     }
-                                    on:input=move |ev| on_update.run(("source_tag", event_target_value(&ev)))
+                                    on:input=move |ev| on_update.run(("source_tag".to_string(), event_target_value(&ev)))
                                 />
                             </label>
                             <label>
@@ -79,7 +79,7 @@ pub fn DetailsPanel(
                                             .map(|item| item.ib.to_string())
                                             .unwrap_or_default()
                                     }
-                                    on:input=move |ev| on_update.run(("ib", event_target_value(&ev)))
+                                    on:input=move |ev| on_update.run(("ib".to_string(), event_target_value(&ev)))
                                 />
                             </label>
                             <label>
@@ -93,37 +93,60 @@ pub fn DetailsPanel(
                                             .map(|item| item.index.to_string())
                                             .unwrap_or_default()
                                     }
-                                    on:input=move |ev| on_update.run(("index", event_target_value(&ev)))
+                                    on:input=move |ev| on_update.run(("index".to_string(), event_target_value(&ev)))
                                 />
                             </label>
                             <label>
-                                "Frequency"
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    prop:value=move || {
-                                        selected
-                                            .get()
-                                            .map(|item| item.frequency.to_string())
-                                            .unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("frequency", event_target_value(&ev)))
-                                />
+                                "Frequency / Weight"
+                                <div class="pair-list">
+                                    <For
+                                        each=move || {
+                                            selected
+                                                .get()
+                                                .map(|item| {
+                                                    item.freq_weight_pairs
+                                                        .into_iter()
+                                                        .enumerate()
+                                                        .collect::<Vec<_>>()
+                                                })
+                                                .unwrap_or_default()
+                                        }
+                                        key=|(index, _)| *index
+                                        children=move |(index, pair)| {
+                                            view! {
+                                                <div class="pair-row">
+                                                    <input
+                                                        type="text"
+                                                        inputmode="decimal"
+                                                        placeholder="frequency"
+                                                        prop:value=pair.frequency.map(|v| v.to_string()).unwrap_or_default()
+                                                        on:input=move |ev| {
+                                                            on_update.run((format!("pair_frequency:{index}"), event_target_value(&ev)))
+                                                        }
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        inputmode="decimal"
+                                                        placeholder="weight"
+                                                        prop:value=pair.weight.map(|v| v.to_string()).unwrap_or_default()
+                                                        on:input=move |ev| {
+                                                            on_update.run((format!("pair_weight:{index}"), event_target_value(&ev)))
+                                                        }
+                                                    />
+                                                </div>
+                                            }
+                                        }
+                                    />
+                                </div>
                             </label>
-                            <label>
-                                "Weight"
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    prop:value=move || {
-                                        selected
-                                            .get()
-                                            .map(|item| item.weight.to_string())
-                                            .unwrap_or_default()
-                                    }
-                                    on:input=move |ev| on_update.run(("weight", event_target_value(&ev)))
-                                />
-                            </label>
+                            <div class="pair-actions">
+                                <button on:click=move |_| on_update.run(("add_pair".to_string(), String::new()))>
+                                    "Add Pair"
+                                </button>
+                                <button on:click=move |_| on_update.run(("clear_pairs".to_string(), String::new()))>
+                                    "Clear Pairs"
+                                </button>
+                            </div>
                             <button class="danger" on:click=move |_| on_delete.run(())>
                                 "Delete Selected"
                             </button>

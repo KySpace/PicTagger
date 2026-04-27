@@ -2,6 +2,23 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct FrequencyWeightPair {
+    #[serde(default)]
+    pub frequency: Option<f64>,
+    #[serde(default)]
+    pub weight: Option<f64>,
+}
+
+impl FrequencyWeightPair {
+    pub fn blank() -> Self {
+        Self {
+            frequency: None,
+            weight: None,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct ImageRecord {
     pub id: Uuid,
     pub image_data: String,
@@ -12,7 +29,11 @@ pub struct ImageRecord {
     #[serde(default)]
     pub tag: String,
     pub index: i32,
+    #[serde(default = "default_frequency_weight_pairs")]
+    pub freq_weight_pairs: Vec<FrequencyWeightPair>,
+    #[serde(default)]
     pub frequency: f64,
+    #[serde(default)]
     pub weight: f64,
     pub created_at: i64,
     pub updated_at: i64,
@@ -29,12 +50,21 @@ impl ImageRecord {
             source_tag: String::new(),
             tag: String::new(),
             index: 0,
+            freq_weight_pairs: default_frequency_weight_pairs(),
             frequency: 0.0,
             weight: 0.0,
             created_at: ts,
             updated_at: ts,
         }
     }
+}
+
+pub fn default_frequency_weight_pairs() -> Vec<FrequencyWeightPair> {
+    vec![
+        FrequencyWeightPair::blank(),
+        FrequencyWeightPair::blank(),
+        FrequencyWeightPair::blank(),
+    ]
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
