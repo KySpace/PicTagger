@@ -33,6 +33,10 @@ struct StoredAxisState {
     x_axis_type: String,
     #[serde(default = "linear_axis")]
     y_axis_type: String,
+    #[serde(default)]
+    threshold_mode: bool,
+    #[serde(default)]
+    weight_threshold: f64,
 }
 
 impl Default for StoredAxisState {
@@ -45,6 +49,8 @@ impl Default for StoredAxisState {
             manual_limits: None,
             x_axis_type: linear_axis(),
             y_axis_type: linear_axis(),
+            threshold_mode: false,
+            weight_threshold: 0.0,
         }
     }
 }
@@ -56,6 +62,8 @@ struct PlotPayload {
     manual_limits: Option<[f64; 4]>,
     x_axis_type: String,
     y_axis_type: String,
+    threshold_mode: bool,
+    weight_threshold: f64,
 }
 
 #[derive(Clone, PartialEq, Serialize)]
@@ -151,6 +159,8 @@ pub fn ScatterPlot(
     );
     let x_axis_type = RwSignal::new(initial_axis_state.x_axis_type);
     let y_axis_type = RwSignal::new(initial_axis_state.y_axis_type);
+    let threshold_mode = RwSignal::new(initial_axis_state.threshold_mode);
+    let weight_threshold = RwSignal::new(initial_axis_state.weight_threshold.clamp(0.0, 1.0));
     let axis_error = RwSignal::new(String::new());
     let plot_ref = NodeRef::<leptos::html::Div>::new();
     let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
@@ -164,6 +174,8 @@ pub fn ScatterPlot(
             manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
             x_axis_type: x_axis_type.get(),
             y_axis_type: y_axis_type.get(),
+            threshold_mode: threshold_mode.get(),
+            weight_threshold: weight_threshold.get(),
         };
         save_axis_state(&state);
     });
@@ -258,6 +270,8 @@ pub fn ScatterPlot(
             manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
             x_axis_type: x_axis_type.get(),
             y_axis_type: y_axis_type.get(),
+            threshold_mode: threshold_mode.get(),
+            weight_threshold: weight_threshold.get(),
         };
         let Ok(payload_json) = serde_json::to_string(&payload) else {
             return;
@@ -373,6 +387,34 @@ pub fn ScatterPlot(
                             <option value="linear">"Linear"</option>
                             <option value="log">"Log"</option>
                         </select>
+                    </label>
+                    <label class="threshold-toggle">
+                        "Opaque"
+                        <input
+                            type="checkbox"
+                            prop:checked=move || threshold_mode.get()
+                            on:change=move |ev| {
+                                threshold_mode.set(event_target_checked(&ev));
+                            }
+                        />
+                    </label>
+                    <label class="threshold-slider">
+                        <span>{move || format!("Weight >= {:.2}", weight_threshold.get())}</span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            prop:value=move || weight_threshold.get().to_string()
+                            prop:disabled=move || !threshold_mode.get()
+                            on:input=move |ev| {
+                                let value = event_target_value(&ev)
+                                    .parse::<f64>()
+                                    .unwrap_or_default()
+                                    .clamp(0.0, 1.0);
+                                weight_threshold.set(value);
+                            }
+                        />
                     </label>
                     <button
                         on:click=move |_| {

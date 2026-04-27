@@ -29,6 +29,14 @@ function markerOpacity(points) {
   return weights.map((weight) => 0.25 + ((weight - min) / (max - min)) * 0.75);
 }
 
+function visiblePoints(points, payload) {
+  if (!payload.threshold_mode) {
+    return points;
+  }
+  const threshold = Number(payload.weight_threshold ?? 0);
+  return points.filter((point) => point.weight >= threshold);
+}
+
 export function renderPlotlyScatter(
   element,
   payloadJson,
@@ -43,7 +51,7 @@ export function renderPlotlyScatter(
   }
 
   const payload = JSON.parse(payloadJson);
-  const points = payload.points ?? [];
+  const points = visiblePoints(payload.points ?? [], payload);
   const selectedId = payload.selected_id;
   const customData = points.map((point) => [point.id, point.pair_index]);
   const lineWidths = points.map((point) => (point.id === selectedId ? 2.5 : 0));
@@ -75,7 +83,7 @@ export function renderPlotlyScatter(
     marker: {
       size: 9,
       color: points.map((point) => point.color),
-      opacity: markerOpacity(points),
+      opacity: payload.threshold_mode ? 1 : markerOpacity(points),
       line: {
         color: lineColors,
         width: lineWidths,

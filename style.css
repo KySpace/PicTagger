@@ -159,6 +159,25 @@ select {
   min-width: 96px;
 }
 
+.scatter-controls .threshold-toggle {
+  min-width: 72px;
+  align-items: center;
+}
+
+.threshold-toggle input {
+  width: auto;
+  min-width: 18px;
+  min-height: 18px;
+}
+
+.scatter-controls .threshold-slider {
+  min-width: 180px;
+}
+
+.threshold-slider input {
+  padding-inline: 0;
+}
+
 .scatter-wrap {
   position: relative;
 }
