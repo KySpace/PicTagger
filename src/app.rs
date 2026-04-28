@@ -18,7 +18,10 @@ use crate::components::filter_bar::IbFilterBar;
 use crate::components::gallery_list::GalleryList;
 use crate::components::scatter_plot::ScatterPlot;
 use crate::components::tag_editor::TagEditor;
-use crate::models::{FrequencyWeightPair, ImageRecord, default_frequency_weight_pairs, default_tag_definitions, now_millis};
+use crate::models::{
+    FrequencyWeightPair, ImageRecord, default_frequency_weight_pairs, default_tag_definitions,
+    normalize_image_tags, now_millis,
+};
 use crate::storage::{
     clear_records, export_cache_zip, import_cache_yaml, import_cache_zip, load_records, load_tags,
     save_records, save_tags,
@@ -291,9 +294,32 @@ pub fn App() -> impl IntoView {
                         item.freq_weight_pairs = default_frequency_weight_pairs();
                         changed = true;
                     }
-                    "tag" => {
-                        if item.tag != value {
-                            item.tag = value;
+                    "tag" | "tag_primary" => {
+                        let mut next = item.tags.clone();
+                        if next.is_empty() {
+                            next.push(value);
+                        } else {
+                            next[0] = value;
+                        }
+                        let next = normalize_image_tags(next);
+                        if item.tags != next {
+                            item.tags = next;
+                            changed = true;
+                        }
+                    }
+                    "tag_secondary" => {
+                        let mut next = item.tags.clone();
+                        if next.is_empty() {
+                            next.push(String::new());
+                        }
+                        if next.len() == 1 {
+                            next.push(value);
+                        } else {
+                            next[1] = value;
+                        }
+                        let next = normalize_image_tags(next);
+                        if item.tags != next {
+                            item.tags = next;
                             changed = true;
                         }
                     }

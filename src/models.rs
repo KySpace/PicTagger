@@ -28,8 +28,8 @@ pub struct ImageRecord {
     pub source: String,
     #[serde(default)]
     pub source_tag: String,
-    #[serde(default)]
-    pub tag: String,
+    #[serde(default = "default_image_tags")]
+    pub tags: Vec<String>,
     pub index: i32,
     #[serde(default = "default_frequency_weight_pairs")]
     pub freq_weight_pairs: Vec<FrequencyWeightPair>,
@@ -51,7 +51,7 @@ impl ImageRecord {
             ib: 0.0,
             source,
             source_tag: String::new(),
-            tag: String::new(),
+            tags: default_image_tags(),
             index: 0,
             freq_weight_pairs: default_frequency_weight_pairs(),
             frequency: 0.0,
@@ -59,6 +59,41 @@ impl ImageRecord {
             created_at: ts,
             updated_at: ts,
         }
+    }
+}
+
+pub fn default_image_tags() -> Vec<String> {
+    Vec::new()
+}
+
+pub fn normalize_image_tags(tags: Vec<String>) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for tag in tags {
+        let tag = tag.trim().to_string();
+        if tag.is_empty() || normalized.iter().any(|existing| existing == &tag) {
+            continue;
+        }
+        normalized.push(tag);
+        if normalized.len() == 2 {
+            break;
+        }
+    }
+    normalized
+}
+
+pub fn primary_tag(tags: &[String]) -> &str {
+    tags.first().map(String::as_str).unwrap_or("")
+}
+
+pub fn secondary_tag(tags: &[String]) -> &str {
+    tags.get(1).map(String::as_str).unwrap_or("")
+}
+
+pub fn tags_label(tags: &[String]) -> String {
+    if tags.is_empty() {
+        "No tag".to_string()
+    } else {
+        tags.join(" + ")
     }
 }
 

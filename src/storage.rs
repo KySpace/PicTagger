@@ -8,7 +8,7 @@ use zip::write::SimpleFileOptions;
 
 use crate::models::{
     FrequencyWeightPair, ImageRecord, TagDefinition, default_frequency_weight_pairs,
-    default_tag_definitions,
+    default_image_tags, default_tag_definitions, normalize_image_tags,
 };
 
 const STORAGE_KEY: &str = "pictagger.gallery.v1";
@@ -28,11 +28,70 @@ pub struct CacheImageRecord {
     pub ib: f64,
     pub source: String,
     pub source_tag: String,
+    #[serde(default = "default_image_tags")]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing)]
     pub tag: String,
     pub index: i32,
     pub freq_weight_pairs: Vec<FrequencyWeightPair>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct StoredImageRecord {
+    pub id: Uuid,
+    pub image_data: String,
+    #[serde(default)]
+    pub image_path: String,
+    pub ib: f64,
+    pub source: String,
+    #[serde(default)]
+    pub source_tag: String,
+    #[serde(default = "default_image_tags")]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub tag: String,
+    pub index: i32,
+    #[serde(default = "default_frequency_weight_pairs")]
+    pub freq_weight_pairs: Vec<FrequencyWeightPair>,
+    #[serde(default)]
+    pub frequency: f64,
+    #[serde(default)]
+    pub weight: f64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+fn current_or_legacy_tags(tags: Vec<String>, legacy_tag: String) -> Vec<String> {
+    let normalized = normalize_image_tags(tags);
+    if normalized.is_empty() {
+        normalize_image_tags(vec![legacy_tag])
+    } else {
+        normalized
+    }
+}
+
+fn stored_record_into_image(record: StoredImageRecord) -> ImageRecord {
+    ImageRecord {
+        id: record.id,
+        image_data: record.image_data,
+        image_path: record.image_path,
+        ib: record.ib,
+        source: record.source,
+        source_tag: record.source_tag,
+        tags: current_or_legacy_tags(record.tags, record.tag),
+        index: record.index,
+        freq_weight_pairs: if record.freq_weight_pairs.is_empty() {
+            default_frequency_weight_pairs()
+        } else {
+            record.freq_weight_pairs
+        },
+        frequency: record.frequency,
+        weight: record.weight,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+    }
 }
 
 impl CacheExport {
@@ -47,7 +106,7 @@ impl CacheExport {
                 ib: record.ib,
                 source: record.source,
                 source_tag: record.source_tag,
-                tag: record.tag,
+                tags: current_or_legacy_tags(record.tags, record.tag),
                 index: record.index,
                 freq_weight_pairs: if record.freq_weight_pairs.is_empty() {
                     default_frequency_weight_pairs()
@@ -133,7 +192,11 @@ pub fn load_records() -> Vec<ImageRecord> {
     let Ok(Some(raw)) = storage.get_item(STORAGE_KEY) else {
         return Vec::new();
     };
-    serde_json::from_str(&raw).unwrap_or_default()
+    serde_json::from_str::<Vec<StoredImageRecord>>(&raw)
+        .unwrap_or_default()
+        .into_iter()
+        .map(stored_record_into_image)
+        .collect()
 }
 
 pub fn save_records(records: &[ImageRecord]) {
@@ -191,7 +254,8 @@ pub fn export_cache_zip(images: &[ImageRecord], tags: &[TagDefinition]) -> Resul
             ib: record.ib,
             source: record.source.clone(),
             source_tag: record.source_tag.clone(),
-            tag: record.tag.clone(),
+            tags: record.tags.clone(),
+            tag: String::new(),
             index: record.index,
             freq_weight_pairs: record.freq_weight_pairs.clone(),
             created_at: record.created_at,
@@ -261,7 +325,7 @@ pub fn import_cache_zip(bytes: &[u8]) -> Result<(Vec<ImageRecord>, Vec<TagDefini
             ib: record.ib,
             source: record.source,
             source_tag: record.source_tag,
-            tag: record.tag,
+            tags: current_or_legacy_tags(record.tags, record.tag),
             index: record.index,
             freq_weight_pairs: if record.freq_weight_pairs.is_empty() {
                 default_frequency_weight_pairs()

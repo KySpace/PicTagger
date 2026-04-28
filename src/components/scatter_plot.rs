@@ -6,7 +6,7 @@ use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 
-use crate::models::{ImageRecord, TagDefinition};
+use crate::models::{ImageRecord, TagDefinition, primary_tag, tags_label};
 
 const AXIS_LIMITS_STORAGE_KEY: &str = "pictagger.scatter.axis_limits.v1";
 const ALL_TAGS_FILTER: &str = "__all__";
@@ -80,7 +80,7 @@ struct PlotPoint {
     weight: f64,
     source: String,
     source_tag: String,
-    tag: String,
+    tags: String,
     color: String,
 }
 
@@ -267,14 +267,19 @@ pub fn ScatterPlot(
             .into_iter()
             .filter(|item| match active_tag_filter.as_str() {
                 ALL_TAGS_FILTER => true,
-                UNTAGGED_FILTER => item.tag.is_empty(),
-                tag_name => item.tag == tag_name,
+                UNTAGGED_FILTER => item.tags.is_empty(),
+                tag_name => item.tags.iter().any(|tag| tag == tag_name),
             })
             .flat_map(|item| {
+                let color_tag = match active_tag_filter.as_str() {
+                    ALL_TAGS_FILTER | UNTAGGED_FILTER => primary_tag(&item.tags),
+                    tag_name => tag_name,
+                };
                 let color = colors
-                    .get(&item.tag)
+                    .get(color_tag)
                     .cloned()
                     .unwrap_or_else(|| "#95a0ad".to_string());
+                let item_tags = tags_label(&item.tags);
                 item.freq_weight_pairs
                     .iter()
                     .enumerate()
@@ -287,7 +292,7 @@ pub fn ScatterPlot(
                             weight: pair.weight.unwrap_or(0.0),
                             source: item.source.clone(),
                             source_tag: item.source_tag.clone(),
-                            tag: item.tag.clone(),
+                            tags: item_tags.clone(),
                             color: color.clone(),
                         })
                     })
@@ -636,7 +641,7 @@ pub fn ScatterPlot(
                                 <div class="plotly-hover-meta">
                                     <p class="preview-source">{item.source}</p>
                                     <p>{format!("source_tag: {}", item.source_tag)}</p>
-                                    <p>{format!("tag: {}", if item.tag.is_empty() { "No tag" } else { &item.tag })}</p>
+                                    <p>{format!("tags: {}", tags_label(&item.tags))}</p>
                                     <p>{format!("pair {}: IB {:.3}", pair_index + 1, item.ib)}</p>
                                     <p>{format!(
                                         "frequency: {}",

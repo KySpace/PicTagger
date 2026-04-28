@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::models::{ImageRecord, TagDefinition, oklch_from_hue};
+use crate::models::{ImageRecord, TagDefinition, oklch_from_hue, primary_tag, tags_label};
 
 #[component]
 pub fn GalleryList(
@@ -34,7 +34,8 @@ pub fn GalleryList(
                         let image_data = item.image_data;
                         let source = item.source;
                         let source_tag = item.source_tag;
-                        let tag = item.tag;
+                        let tags_label_text = tags_label(&item.tags);
+                        let primary_tag_name = primary_tag(&item.tags).to_string();
                         let ib = item.ib;
                         let index = item.index;
                         let active_pair_count = item
@@ -43,7 +44,7 @@ pub fn GalleryList(
                             .filter(|pair| pair.frequency.is_some())
                             .count();
                         let has_frequency = active_pair_count > 0;
-                        let tag_for_style = tag.clone();
+                        let tag_for_style = primary_tag_name.clone();
                         let card_tag_color = move || {
                             tag_color_map
                                 .get()
@@ -51,7 +52,7 @@ pub fn GalleryList(
                                 .cloned()
                                 .unwrap_or_else(|| "transparent".to_string())
                         };
-                        let tag_for_swatch = tag.clone();
+                        let tag_for_swatch = primary_tag_name.clone();
                         let swatch_tag_color = move || {
                             tag_color_map
                                 .get()
@@ -84,7 +85,7 @@ pub fn GalleryList(
                                     <p class="source">{source}</p>
                                     <p class="gallery-tag-line">
                                         <span class="tag-color-swatch" style=move || format!("background:{};", swatch_tag_color())></span>
-                                        <span>{format!("tag: {tag}")}</span>
+                                        <span>{format!("tags: {tags_label_text}")}</span>
                                     </p>
                                     <p>{format!("source_tag: {source_tag}")}</p>
                                     <p>{format!("IB: {ib:.3}  pairs: {active_pair_count}")}</p>

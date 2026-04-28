@@ -106,8 +106,10 @@ pub fn TagEditor(tags: RwSignal<Vec<TagDefinition>>, images: RwSignal<Vec<ImageR
                                             if renamed {
                                                 images.update(|items| {
                                                     for item in items.iter_mut() {
-                                                        if item.tag == name_for_rename {
-                                                            item.tag = next.clone();
+                                                        for tag in item.tags.iter_mut() {
+                                                            if tag == &name_for_rename {
+                                                                *tag = next.clone();
+                                                            }
                                                         }
                                                     }
                                                 });

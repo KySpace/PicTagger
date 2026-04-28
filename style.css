@@ -404,6 +404,25 @@ select {
   position: relative;
 }
 
+.tag-select-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.tag-select-inline {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.tag-summary {
+  font-size: 0.78rem;
+  opacity: 0.72;
+}
+
 .tag-select-button,
 .tag-select-option {
   width: 100%;

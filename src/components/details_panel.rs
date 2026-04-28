@@ -1,7 +1,9 @@
 use leptos::prelude::*;
 use std::collections::HashMap;
 
-use crate::models::{ImageRecord, TagDefinition, oklch_from_hue};
+use crate::models::{
+    ImageRecord, TagDefinition, oklch_from_hue, primary_tag, secondary_tag, tags_label,
+};
 
 #[component]
 pub fn DetailsPanel(
@@ -11,7 +13,6 @@ pub fn DetailsPanel(
     on_delete: Callback<()>,
 ) -> impl IntoView {
     let show_preview_modal = RwSignal::new(false);
-    let show_tag_menu = RwSignal::new(false);
     let source_draft = RwSignal::new(String::new());
     let source_tag_draft = RwSignal::new(String::new());
     let ib_draft = RwSignal::new(String::new());
@@ -42,7 +43,7 @@ pub fn DetailsPanel(
     let selected_tag_color = move || {
         selected
             .get()
-            .and_then(|item| tag_color_map.get().get(&item.tag).cloned())
+            .and_then(|item| tag_color_map.get().get(primary_tag(&item.tags)).cloned())
             .unwrap_or_else(|| "transparent".to_string())
     };
 
@@ -55,79 +56,52 @@ pub fn DetailsPanel(
                         <div class="details-content">
                             <div class="details-form">
                                 <label>
-                                    "Tag"
-                                    <div class="tag-select">
-                                        <button
-                                            type="button"
-                                            class="tag-select-button"
-                                            on:click=move |_| show_tag_menu.update(|shown| *shown = !*shown)
-                                        >
+                                    "Tags"
+                                    <div class="tag-select-row">
+                                        <div class="tag-select-inline">
                                             <span
                                                 class="tag-color-swatch"
                                                 style=move || format!("background:{};", selected_tag_color())
                                             ></span>
-                                            <span>
-                                                {move || {
-                                                    selected
-                                                        .get()
-                                                        .map(|item| {
-                                                            if item.tag.is_empty() {
-                                                                "No tag".to_string()
-                                                            } else {
-                                                                item.tag
-                                                            }
-                                                        })
-                                                        .unwrap_or_else(|| "No tag".to_string())
-                                                }}
-                                            </span>
-                                        </button>
-                                        {move || {
-                                            if show_tag_menu.get() {
-                                                view! {
-                                                    <div class="tag-select-menu">
-                                                        <button
-                                                            type="button"
-                                                            class="tag-select-option"
-                                                            on:click=move |_| {
-                                                                on_update.run(("tag".to_string(), String::new()));
-                                                                show_tag_menu.set(false);
-                                                            }
-                                                        >
-                                                            <span class="tag-color-swatch empty"></span>
-                                                            <span>"No tag"</span>
-                                                        </button>
-                                                        <For
-                                                            each=move || tags.get()
-                                                            key=|t| t.name.clone()
-                                                            children=move |t| {
-                                                                let name = t.name.clone();
-                                                                let color = oklch_from_hue(t.hue);
-                                                                view! {
-                                                                    <button
-                                                                        type="button"
-                                                                        class="tag-select-option"
-                                                                        on:click=move |_| {
-                                                                            on_update.run(("tag".to_string(), name.clone()));
-                                                                            show_tag_menu.set(false);
-                                                                        }
-                                                                    >
-                                                                        <span
-                                                                            class="tag-color-swatch"
-                                                                            style=format!("background:{};", color)
-                                                                        ></span>
-                                                                        <span>{t.name}</span>
-                                                                    </button>
-                                                                }
-                                                            }
-                                                        />
-                                                    </div>
+                                            <select
+                                                prop:value=move || selected.get().map(|item| primary_tag(&item.tags).to_string()).unwrap_or_default()
+                                                on:change=move |ev| {
+                                                    on_update.run(("tag_primary".to_string(), event_target_value(&ev)));
                                                 }
-                                                    .into_any()
-                                            } else {
-                                                ().into_any()
+                                            >
+                                                <option value="">"No tag"</option>
+                                                {move || {
+                                                    tags.get()
+                                                        .into_iter()
+                                                        .map(|tag| {
+                                                            let name = tag.name;
+                                                            let value = name.clone();
+                                                            view! { <option value=value>{name}</option> }
+                                                        })
+                                                        .collect_view()
+                                                }}
+                                            </select>
+                                        </div>
+                                        <select
+                                            prop:value=move || selected.get().map(|item| secondary_tag(&item.tags).to_string()).unwrap_or_default()
+                                            on:change=move |ev| {
+                                                on_update.run(("tag_secondary".to_string(), event_target_value(&ev)));
                                             }
-                                        }}
+                                        >
+                                            <option value="">"No tag"</option>
+                                            {move || {
+                                                tags.get()
+                                                    .into_iter()
+                                                    .map(|tag| {
+                                                        let name = tag.name;
+                                                        let value = name.clone();
+                                                        view! { <option value=value>{name}</option> }
+                                                    })
+                                                    .collect_view()
+                                            }}
+                                        </select>
                                     </div>
+                                    <span class="tag-summary">{move || selected.get().map(|item| tags_label(&item.tags)).unwrap_or_else(|| "No tag".to_string())}</span>
                                 </label>
                                 <label>
                                     "Source"
