@@ -262,6 +262,12 @@ select {
   font-size: 0.82rem;
 }
 
+.preview-tag-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .plotly-hover-actions {
   display: flex;
   flex-wrap: wrap;
@@ -388,6 +394,15 @@ select {
 }
 
 .tag-color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #c8d0c6;
+  border-radius: 999px;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.tag-disk {
   width: 18px;
   height: 18px;
   border: 1px solid #c8d0c6;
@@ -592,6 +607,14 @@ select {
   padding: 0.75rem;
   display: grid;
   gap: 0.6rem;
+}
+
+.image-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .image-preview-card img {

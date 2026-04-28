@@ -40,11 +40,31 @@ pub fn DetailsPanel(
             .map(|t| (t.name, oklch_from_hue(t.hue)))
             .collect::<HashMap<_, _>>()
     });
-    let selected_tag_color = move || {
-        selected
-            .get()
-            .and_then(|item| tag_color_map.get().get(primary_tag(&item.tags)).cloned())
-            .unwrap_or_else(|| "transparent".to_string())
+    let selected_tag_disk_style = move || {
+        selected.get().map(|item| {
+            let colors = tag_color_map.get();
+            match item.tags.as_slice() {
+                [] => "background: transparent;".to_string(),
+                [first] => format!(
+                    "background:{};",
+                    colors
+                        .get(first)
+                        .cloned()
+                        .unwrap_or_else(|| "transparent".to_string())
+                ),
+                [first, second, ..] => {
+                    let first = colors
+                        .get(first)
+                        .cloned()
+                        .unwrap_or_else(|| "transparent".to_string());
+                    let second = colors
+                        .get(second)
+                        .cloned()
+                        .unwrap_or_else(|| "transparent".to_string());
+                    format!("background: linear-gradient(90deg, {first} 0 50%, {second} 50% 100%);")
+                }
+            }
+        }).unwrap_or_else(|| "background: transparent;".to_string())
     };
 
     view! {
@@ -61,7 +81,7 @@ pub fn DetailsPanel(
                                         <div class="tag-select-inline">
                                             <span
                                                 class="tag-color-swatch"
-                                                style=move || format!("background:{};", selected_tag_color())
+                                                style=move || selected_tag_disk_style()
                                             ></span>
                                             <select
                                                 prop:value=move || selected.get().map(|item| primary_tag(&item.tags).to_string()).unwrap_or_default()
@@ -228,6 +248,10 @@ pub fn DetailsPanel(
                                         on:click=move |_| show_preview_modal.set(false)
                                     >
                                         <div class="image-preview-card" on:click=move |ev| ev.stop_propagation()>
+                                            <div class="image-preview-header">
+                                                <span class="tag-disk" style=move || selected_tag_disk_style()></span>
+                                                <span>{move || selected.get().map(|item| tags_label(&item.tags)).unwrap_or_else(|| "No tag".to_string())}</span>
+                                            </div>
                                             <img
                                                 src=move || {
                                                     selected

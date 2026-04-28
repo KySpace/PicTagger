@@ -198,6 +198,30 @@ fn position_hover_card(cursor_x: f64, cursor_y: f64) -> (f64, f64) {
     )
 }
 
+fn tag_disk_style(tags: &[String], colors: &HashMap<String, String>) -> String {
+    match tags {
+        [] => "background: transparent;".to_string(),
+        [first] => format!(
+            "background:{};",
+            colors
+                .get(first)
+                .cloned()
+                .unwrap_or_else(|| "transparent".to_string())
+        ),
+        [first, second, ..] => {
+            let first = colors
+                .get(first)
+                .cloned()
+                .unwrap_or_else(|| "transparent".to_string());
+            let second = colors
+                .get(second)
+                .cloned()
+                .unwrap_or_else(|| "transparent".to_string());
+            format!("background: linear-gradient(90deg, {first} 0 50%, {second} 50% 100%);")
+        }
+    }
+}
+
 #[component]
 pub fn ScatterPlot(
     images: Memo<Vec<ImageRecord>>,
@@ -626,6 +650,7 @@ pub fn ScatterPlot(
                     .map(|(item, pair_index, frequency, weight)| {
                         let id = item.id;
                         let (left, top) = hover_card_position.get();
+                        let tag_disk_style = tag_disk_style(&item.tags, &tag_color_map.get());
                         view! {
                             <div
                                 class="plotly-hover-preview"
@@ -641,7 +666,10 @@ pub fn ScatterPlot(
                                 <div class="plotly-hover-meta">
                                     <p class="preview-source">{item.source}</p>
                                     <p>{format!("source_tag: {}", item.source_tag)}</p>
-                                    <p>{format!("tags: {}", tags_label(&item.tags))}</p>
+                                    <p class="preview-tag-line">
+                                        <span class="tag-disk" style=tag_disk_style></span>
+                                        <span>{format!("tags: {}", tags_label(&item.tags))}</span>
+                                    </p>
                                     <p>{format!("pair {}: IB {:.3}", pair_index + 1, item.ib)}</p>
                                     <p>{format!(
                                         "frequency: {}",
