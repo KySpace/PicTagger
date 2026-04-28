@@ -72,17 +72,7 @@ export function renderPlotlyScatter(
     x: points.map((point) => point.ib),
     y: points.map((point) => point.frequency),
     customdata: customData,
-    text: points.map(
-      (point) =>
-        `source: ${point.source}<br>` +
-        `source_tag: ${point.source_tag}<br>` +
-        `tag: ${point.tag || "No tag"}<br>` +
-        `pair: ${point.pair_index + 1}<br>` +
-        `IB: ${point.ib}<br>` +
-        `frequency: ${point.frequency}<br>` +
-        `weight: ${point.weight}`,
-    ),
-    hovertemplate: "%{text}<extra></extra>",
+    hoverinfo: "none",
     marker: {
       size: 9,
       color: points.map((point) =>
@@ -145,8 +135,12 @@ export function renderPlotlyScatter(
     element.on("plotly_hover", (event) => {
       const id = event?.points?.[0]?.customdata?.[0];
       const pairIndex = event?.points?.[0]?.customdata?.[1];
+      const clientX = event?.event?.clientX ?? 24;
+      const clientY = event?.event?.clientY ?? 24;
       if (id) {
-        element.__pictaggerOnHover(`${id}:${pairIndex ?? 0}`);
+        element.__pictaggerOnHover(
+          `${id}:${pairIndex ?? 0}:${clientX}:${clientY}`,
+        );
       }
     });
     element.on("plotly_unhover", () => {

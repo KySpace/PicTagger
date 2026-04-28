@@ -227,8 +227,6 @@ select {
 
 .plotly-hover-preview {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
   z-index: 40;
   width: min(360px, calc(100vw - 2rem));
   border: 1px solid var(--line);

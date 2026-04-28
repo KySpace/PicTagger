@@ -159,6 +159,45 @@ fn plotly_color_from_hue(hue: f64) -> String {
     )
 }
 
+fn position_hover_card(cursor_x: f64, cursor_y: f64) -> (f64, f64) {
+    let (viewport_width, viewport_height) = web_sys::window()
+        .map(|window| {
+            (
+                window
+                    .inner_width()
+                    .ok()
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1200.0),
+                window
+                    .inner_height()
+                    .ok()
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(800.0),
+            )
+        })
+        .unwrap_or((1200.0, 800.0));
+
+    let card_width = 360.0;
+    let card_height = 172.0;
+    let gap = 14.0;
+    let margin = 12.0;
+
+    let mut left = cursor_x + gap;
+    if left + card_width > viewport_width - margin {
+        left = cursor_x - card_width - gap;
+    }
+
+    let mut top = cursor_y + gap;
+    if top + card_height > viewport_height - margin {
+        top = cursor_y - card_height - gap;
+    }
+
+    (
+        left.clamp(margin, (viewport_width - card_width - margin).max(margin)),
+        top.clamp(margin, (viewport_height - card_height - margin).max(margin)),
+    )
+}
+
 #[component]
 pub fn ScatterPlot(
     images: Memo<Vec<ImageRecord>>,
@@ -187,6 +226,8 @@ pub fn ScatterPlot(
     let axis_error = RwSignal::new(String::new());
     let plot_ref = NodeRef::<leptos::html::Div>::new();
     let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
+    let hover_card_hovered = RwSignal::new(false);
+    let hover_card_position = RwSignal::new((24.0, 24.0));
 
     Effect::new(move |_| {
         let state = StoredAxisState {
@@ -320,9 +361,21 @@ pub fn ScatterPlot(
             }
         }) as Box<dyn Fn(String)>);
         let hover_callback = Closure::wrap(Box::new(move |raw_key: String| {
-            let (raw_id, raw_pair_index) = raw_key.split_once(':').unwrap_or((&raw_key, "0"));
+            let mut parts = raw_key.split(':');
+            let raw_id = parts.next().unwrap_or_default();
+            let raw_pair_index = parts.next().unwrap_or("0");
+            let client_x = parts
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .unwrap_or(24.0);
+            let client_y = parts
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .unwrap_or(24.0);
             if let Ok(id) = Uuid::parse_str(raw_id) {
                 hover_id.set(Some(id));
+                hover_card_hovered.set(false);
+                hover_card_position.set(position_hover_card(client_x, client_y));
                 hovered_pair.set(Some((
                     id,
                     raw_pair_index.parse::<usize>().unwrap_or_default(),
@@ -330,8 +383,28 @@ pub fn ScatterPlot(
             }
         }) as Box<dyn Fn(String)>);
         let unhover_callback = Closure::wrap(Box::new(move || {
-            hover_id.set(None);
-            hovered_pair.set(None);
+            let callback = Closure::once(move || {
+                if !hover_card_hovered.get_untracked() {
+                    hover_id.set(None);
+                    hovered_pair.set(None);
+                }
+            });
+            if let Some(window) = web_sys::window() {
+                if window
+                    .set_timeout_with_callback_and_timeout_and_arguments_0(
+                        callback.as_ref().unchecked_ref(),
+                        260,
+                    )
+                    .is_ok()
+                {
+                    callback.forget();
+                    return;
+                }
+            }
+            if !hover_card_hovered.get_untracked() {
+                hover_id.set(None);
+                hovered_pair.set(None);
+            }
         }) as Box<dyn Fn()>);
 
         render_plotly_scatter(
@@ -547,8 +620,18 @@ pub fn ScatterPlot(
                     .get()
                     .map(|(item, pair_index, frequency, weight)| {
                         let id = item.id;
+                        let (left, top) = hover_card_position.get();
                         view! {
-                            <div class="plotly-hover-preview">
+                            <div
+                                class="plotly-hover-preview"
+                                style=format!("left:{left}px; top:{top}px;")
+                                on:mouseenter=move |_| hover_card_hovered.set(true)
+                                on:mouseleave=move |_| {
+                                    hover_card_hovered.set(false);
+                                    hover_id.set(None);
+                                    hovered_pair.set(None);
+                                }
+                            >
                                 <img src=item.image_data alt="hover preview" />
                                 <div class="plotly-hover-meta">
                                     <p class="preview-source">{item.source}</p>
