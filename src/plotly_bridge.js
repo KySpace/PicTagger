@@ -46,6 +46,7 @@ export function renderPlotlyScatter(
   const points = payload.points ?? [];
   const selectedId = payload.selected_id;
   const threshold = Number(payload.weight_threshold ?? 0);
+  const baseMarkerSize = 9;
   const customData = points.map((point) => [point.id, point.pair_index]);
   const isBelowThreshold = (point) =>
     payload.threshold_mode && point.weight < threshold;
@@ -65,6 +66,7 @@ export function renderPlotlyScatter(
   element.__pictaggerOnSelect = onSelect;
   element.__pictaggerOnHover = onHover;
   element.__pictaggerOnUnhover = onUnhover;
+  element.__pictaggerPointCount = points.length;
 
   const trace = {
     type: "scatter",
@@ -74,7 +76,7 @@ export function renderPlotlyScatter(
     customdata: customData,
     hoverinfo: "none",
     marker: {
-      size: 9,
+      size: points.map(() => baseMarkerSize),
       color: points.map((point) =>
         isBelowThreshold(point) ? "rgba(255,255,255,0)" : point.color,
       ),
@@ -135,8 +137,16 @@ export function renderPlotlyScatter(
     element.on("plotly_hover", (event) => {
       const id = event?.points?.[0]?.customdata?.[0];
       const pairIndex = event?.points?.[0]?.customdata?.[1];
+      const pointNumber = event?.points?.[0]?.pointNumber;
       const clientX = event?.event?.clientX ?? 24;
       const clientY = event?.event?.clientY ?? 24;
+      if (Number.isInteger(pointNumber)) {
+        const sizes = Array.from(
+          { length: element.__pictaggerPointCount ?? 0 },
+          (_, index) => (index === pointNumber ? baseMarkerSize * 1.2 : baseMarkerSize),
+        );
+        globalThis.Plotly.restyle(element, { "marker.size": [sizes] }, [0]);
+      }
       if (id) {
         element.__pictaggerOnHover(
           `${id}:${pairIndex ?? 0}:${clientX}:${clientY}`,
@@ -144,6 +154,11 @@ export function renderPlotlyScatter(
       }
     });
     element.on("plotly_unhover", () => {
+      const sizes = Array.from(
+        { length: element.__pictaggerPointCount ?? 0 },
+        () => baseMarkerSize,
+      );
+      globalThis.Plotly.restyle(element, { "marker.size": [sizes] }, [0]);
       element.__pictaggerOnUnhover();
     });
     element.__pictaggerPlotlyHandlers = true;
