@@ -140,7 +140,15 @@ export function renderPlotlyScatter(
       const pointNumber = event?.points?.[0]?.pointNumber;
       const clientX = event?.event?.clientX ?? 24;
       const clientY = event?.event?.clientY ?? 24;
-      if (Number.isInteger(pointNumber)) {
+      if (element.__pictaggerHoverClearTimer) {
+        clearTimeout(element.__pictaggerHoverClearTimer);
+        element.__pictaggerHoverClearTimer = undefined;
+      }
+      if (
+        Number.isInteger(pointNumber) &&
+        element.__pictaggerHoveredPointNumber !== pointNumber
+      ) {
+        element.__pictaggerHoveredPointNumber = pointNumber;
         const sizes = Array.from(
           { length: element.__pictaggerPointCount ?? 0 },
           (_, index) => (index === pointNumber ? baseMarkerSize * 1.2 : baseMarkerSize),
@@ -154,12 +162,19 @@ export function renderPlotlyScatter(
       }
     });
     element.on("plotly_unhover", () => {
-      const sizes = Array.from(
-        { length: element.__pictaggerPointCount ?? 0 },
-        () => baseMarkerSize,
-      );
-      globalThis.Plotly.restyle(element, { "marker.size": [sizes] }, [0]);
-      element.__pictaggerOnUnhover();
+      if (element.__pictaggerHoverClearTimer) {
+        clearTimeout(element.__pictaggerHoverClearTimer);
+      }
+      element.__pictaggerHoverClearTimer = setTimeout(() => {
+        element.__pictaggerHoverClearTimer = undefined;
+        element.__pictaggerHoveredPointNumber = undefined;
+        const sizes = Array.from(
+          { length: element.__pictaggerPointCount ?? 0 },
+          () => baseMarkerSize,
+        );
+        globalThis.Plotly.restyle(element, { "marker.size": [sizes] }, [0]);
+        element.__pictaggerOnUnhover();
+      }, 90);
     });
     element.__pictaggerPlotlyHandlers = true;
   });

@@ -252,6 +252,7 @@ pub fn ScatterPlot(
     let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
     let hover_card_hovered = RwSignal::new(false);
     let hover_card_position = RwSignal::new((24.0, 24.0));
+    let hover_generation = RwSignal::new(0_u64);
 
     Effect::new(move |_| {
         let state = StoredAxisState {
@@ -402,6 +403,7 @@ pub fn ScatterPlot(
                 .and_then(|raw| raw.parse::<f64>().ok())
                 .unwrap_or(24.0);
             if let Ok(id) = Uuid::parse_str(raw_id) {
+                hover_generation.update(|generation| *generation = generation.wrapping_add(1));
                 hover_id.set(Some(id));
                 hover_card_hovered.set(false);
                 hover_card_position.set(position_hover_card(client_x, client_y));
@@ -412,8 +414,11 @@ pub fn ScatterPlot(
             }
         }) as Box<dyn Fn(String)>);
         let unhover_callback = Closure::wrap(Box::new(move || {
+            let unhover_generation = hover_generation.get_untracked();
             let callback = Closure::once(move || {
-                if !hover_card_hovered.get_untracked() {
+                if hover_generation.get_untracked() == unhover_generation
+                    && !hover_card_hovered.get_untracked()
+                {
                     hover_id.set(None);
                     hovered_pair.set(None);
                 }
@@ -430,7 +435,9 @@ pub fn ScatterPlot(
                     return;
                 }
             }
-            if !hover_card_hovered.get_untracked() {
+            if hover_generation.get_untracked() == unhover_generation
+                && !hover_card_hovered.get_untracked()
+            {
                 hover_id.set(None);
                 hovered_pair.set(None);
             }
@@ -655,8 +662,12 @@ pub fn ScatterPlot(
                             <div
                                 class="plotly-hover-preview"
                                 style=format!("left:{left}px; top:{top}px;")
-                                on:mouseenter=move |_| hover_card_hovered.set(true)
+                                on:mouseenter=move |_| {
+                                    hover_generation.update(|generation| *generation = generation.wrapping_add(1));
+                                    hover_card_hovered.set(true);
+                                }
                                 on:mouseleave=move |_| {
+                                    hover_generation.update(|generation| *generation = generation.wrapping_add(1));
                                     hover_card_hovered.set(false);
                                     hover_id.set(None);
                                     hovered_pair.set(None);
