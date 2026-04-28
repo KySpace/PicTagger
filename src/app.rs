@@ -23,8 +23,8 @@ use crate::models::{
     normalize_image_tags, now_millis,
 };
 use crate::storage::{
-    clear_records, export_cache_zip, import_cache_yaml, import_cache_zip, load_records, load_tags,
-    save_records, save_tags,
+    export_cache_zip, import_cache_yaml, import_cache_zip, load_records, load_tags, save_records,
+    save_tags,
 };
 use uuid::Uuid;
 
@@ -265,14 +265,14 @@ pub fn App() -> impl IntoView {
             };
 
             if let Some((imported_images, imported_tags)) = imported {
-                    images.set(imported_images);
-                    tags.set(if imported_tags.is_empty() {
-                        default_tag_definitions()
-                    } else {
-                        imported_tags
-                    });
-                    selected_id.set(None);
-                    hover_id.set(None);
+                images.set(imported_images);
+                tags.set(if imported_tags.is_empty() {
+                    default_tag_definitions()
+                } else {
+                    imported_tags
+                });
+                selected_id.set(None);
+                hover_id.set(None);
             }
         });
         input.set_value("");
@@ -417,10 +417,8 @@ pub fn App() -> impl IntoView {
 
     let on_clear_all = move || {
         images.set(Vec::new());
-        tags.set(default_tag_definitions());
         selected_id.set(None);
         hover_id.set(None);
-        clear_records();
     };
 
     let select_and_scroll = move |id: Uuid| {
@@ -605,8 +603,8 @@ pub fn App() -> impl IntoView {
                     view! {
                         <div class="modal-backdrop">
                             <div class="modal-card">
-                                <h3>"Delete All Images?"</h3>
-                                <p>"This will permanently remove all gallery records and local saved data."</p>
+                                <h3>"Clear Gallery?"</h3>
+                                <p>"This will remove all pictures and plotted dots from the gallery. Tags are kept."</p>
                                 <div class="modal-actions">
                                     <button on:click=move |_| show_delete_all_modal.set(false)>"Cancel"</button>
                                     <button
@@ -616,7 +614,7 @@ pub fn App() -> impl IntoView {
                                             on_clear_all();
                                         }
                                     >
-                                        "Delete All"
+                                        "Clear Gallery"
                                     </button>
                                 </div>
                             </div>

@@ -98,7 +98,7 @@ pub fn GalleryList(
             </div>
             <div class="gallery-actions">
                 <button class="danger" on:click=move |_| on_request_delete_all.run(())>
-                    "Delete All"
+                    "Clear Gallery"
                 </button>
             </div>
         </section>

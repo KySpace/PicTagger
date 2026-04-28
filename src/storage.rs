@@ -209,13 +209,6 @@ pub fn save_records(records: &[ImageRecord]) {
     let _ = storage.set_item(STORAGE_KEY, &payload);
 }
 
-pub fn clear_records() {
-    if let Some(storage) = web_storage() {
-        let _ = storage.remove_item(STORAGE_KEY);
-        let _ = storage.remove_item(TAGS_STORAGE_KEY);
-    }
-}
-
 pub fn load_tags() -> Vec<TagDefinition> {
     let Some(storage) = web_storage() else {
         return default_tag_definitions();
