@@ -23,6 +23,7 @@ extern "C" {
         on_hover: &Function,
         on_unhover: &Function,
         on_mark: &Function,
+        on_mark_positions: &Function,
     );
 }
 
@@ -86,6 +87,14 @@ struct PlotPoint {
     source_tag: String,
     tags: String,
     color: String,
+}
+
+#[derive(Deserialize)]
+struct MarkedPointPosition {
+    id: String,
+    pair_index: usize,
+    dot_x: f64,
+    dot_y: f64,
 }
 
 #[derive(Clone, PartialEq)]
@@ -517,6 +526,36 @@ pub fn ScatterPlot(
                 }
             });
         }) as Box<dyn Fn(String)>);
+        let mark_positions_callback = Closure::wrap(Box::new(move |raw_json: String| {
+            let Ok(positions) = serde_json::from_str::<Vec<MarkedPointPosition>>(&raw_json) else {
+                return;
+            };
+            if positions.is_empty() {
+                return;
+            }
+            let positions = positions
+                .into_iter()
+                .filter_map(|position| {
+                    Uuid::parse_str(&position.id)
+                        .ok()
+                        .map(|id| ((id, position.pair_index), (position.dot_x, position.dot_y)))
+                })
+                .collect::<HashMap<_, _>>();
+            if positions.is_empty() {
+                return;
+            }
+
+            marked_previews.update(|marks| {
+                for mark in marks.iter_mut() {
+                    if let Some((dot_x, dot_y)) = positions.get(&(mark.id, mark.pair_index)) {
+                        if (mark.dot_x - dot_x).abs() > 0.5 || (mark.dot_y - dot_y).abs() > 0.5 {
+                            mark.dot_x = *dot_x;
+                            mark.dot_y = *dot_y;
+                        }
+                    }
+                }
+            });
+        }) as Box<dyn Fn(String)>);
 
         render_plotly_scatter(
             element.as_ref(),
@@ -525,12 +564,14 @@ pub fn ScatterPlot(
             hover_callback.as_ref().unchecked_ref(),
             unhover_callback.as_ref().unchecked_ref(),
             mark_callback.as_ref().unchecked_ref(),
+            mark_positions_callback.as_ref().unchecked_ref(),
         );
 
         select_callback.forget();
         hover_callback.forget();
         unhover_callback.forget();
         mark_callback.forget();
+        mark_positions_callback.forget();
     });
 
     let apply_axis_limits = move |_| {

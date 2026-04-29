@@ -36,6 +36,7 @@ export function renderPlotlyScatter(
   onHover,
   onUnhover,
   onMark,
+  onMarkPositions,
 ) {
   if (!globalThis.Plotly) {
     element.innerHTML =
@@ -68,20 +69,34 @@ export function renderPlotlyScatter(
   element.__pictaggerOnHover = onHover;
   element.__pictaggerOnUnhover = onUnhover;
   element.__pictaggerOnMark = onMark;
+  element.__pictaggerOnMarkPositions = onMarkPositions;
   element.__pictaggerMarkMode = Boolean(payload.mark_mode);
   element.__pictaggerPointCount = points.length;
+  element.__pictaggerPoints = points;
+
+  const axisPixel = (axis, value) => {
+    if (axis && typeof axis.d2p === "function") {
+      return axis.d2p(value);
+    }
+    if (axis && typeof axis.l2p === "function") {
+      return axis.l2p(value);
+    }
+    return undefined;
+  };
 
   const pointScreenPosition = (point, event) => {
     const rect = element.getBoundingClientRect();
-    const xaxis = point?.xaxis;
-    const yaxis = point?.yaxis;
+    const xaxis = point?.xaxis ?? element._fullLayout?.xaxis;
+    const yaxis = point?.yaxis ?? element._fullLayout?.yaxis;
+    const xPixel = axisPixel(xaxis, point?.x);
+    const yPixel = axisPixel(yaxis, point?.y);
     const dotX =
-      xaxis && typeof xaxis.l2p === "function"
-        ? rect.left + (xaxis._offset ?? 0) + xaxis.l2p(point.x)
+      Number.isFinite(xPixel)
+        ? rect.left + (xaxis?._offset ?? 0) + xPixel
         : event?.clientX ?? 24;
     const dotY =
-      yaxis && typeof yaxis.l2p === "function"
-        ? rect.top + (yaxis._offset ?? 0) + yaxis.l2p(point.y)
+      Number.isFinite(yPixel)
+        ? rect.top + (yaxis?._offset ?? 0) + yPixel
         : event?.clientY ?? 24;
     return [dotX, dotY];
   };
@@ -98,6 +113,49 @@ export function renderPlotlyScatter(
     element.__pictaggerOnMark(
       `${id}:${pairIndex}:${dotX}:${dotY}:${clientX}:${clientY}`,
     );
+  };
+
+  const updateMarkedPointPositions = () => {
+    if (!element.__pictaggerMarkMode || !element.__pictaggerOnMarkPositions) {
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    const xaxis = element._fullLayout?.xaxis;
+    const yaxis = element._fullLayout?.yaxis;
+    if (!xaxis || !yaxis) {
+      return;
+    }
+    const positions = (element.__pictaggerPoints ?? [])
+      .map((point) => {
+        const xPixel = axisPixel(xaxis, point.ib);
+        const yPixel = axisPixel(yaxis, point.frequency);
+        if (!Number.isFinite(xPixel) || !Number.isFinite(yPixel)) {
+          return undefined;
+        }
+        return {
+          id: point.id,
+          pair_index: point.pair_index,
+          dot_x: rect.left + (xaxis._offset ?? 0) + xPixel,
+          dot_y: rect.top + (yaxis._offset ?? 0) + yPixel,
+        };
+      })
+      .filter(Boolean);
+    if (positions.length > 0) {
+      element.__pictaggerOnMarkPositions(JSON.stringify(positions));
+    }
+  };
+
+  const scheduleMarkedPointPositionUpdate = () => {
+    if (!element.__pictaggerMarkMode) {
+      return;
+    }
+    if (element.__pictaggerMarkPositionFrame) {
+      cancelAnimationFrame(element.__pictaggerMarkPositionFrame);
+    }
+    element.__pictaggerMarkPositionFrame = requestAnimationFrame(() => {
+      element.__pictaggerMarkPositionFrame = undefined;
+      updateMarkedPointPositions();
+    });
   };
 
   const trace = {
@@ -157,6 +215,8 @@ export function renderPlotlyScatter(
   };
 
   globalThis.Plotly.react(element, [trace], layout, config).then(() => {
+    scheduleMarkedPointPositionUpdate();
+
     if (element.__pictaggerPlotlyHandlers || typeof element.on !== "function") {
       return;
     }
@@ -217,6 +277,12 @@ export function renderPlotlyScatter(
         element.__pictaggerOnUnhover();
       }, 90);
     });
+    element.on("plotly_relayout", () => {
+      scheduleMarkedPointPositionUpdate();
+    });
+    element.on("plotly_afterplot", () => {
+      scheduleMarkedPointPositionUpdate();
+    });
     element.addEventListener("contextmenu", (event) => {
       if (!element.__pictaggerMarkMode) {
         return;
@@ -226,6 +292,12 @@ export function renderPlotlyScatter(
         markPoint(element.__pictaggerLastHoverPoint, event);
       }
     });
+    if (globalThis.ResizeObserver) {
+      element.__pictaggerResizeObserver = new ResizeObserver(() => {
+        scheduleMarkedPointPositionUpdate();
+      });
+      element.__pictaggerResizeObserver.observe(element);
+    }
     element.__pictaggerPlotlyHandlers = true;
   });
 }
