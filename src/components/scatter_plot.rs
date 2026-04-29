@@ -39,6 +39,10 @@ struct StoredAxisState {
     #[serde(default = "linear_axis")]
     y_axis_type: String,
     #[serde(default)]
+    x_limits_fixed: bool,
+    #[serde(default)]
+    y_limits_fixed: bool,
+    #[serde(default)]
     threshold_mode: bool,
     #[serde(default)]
     weight_threshold: f64,
@@ -56,6 +60,8 @@ impl Default for StoredAxisState {
             manual_limits: None,
             x_axis_type: linear_axis(),
             y_axis_type: linear_axis(),
+            x_limits_fixed: false,
+            y_limits_fixed: false,
             threshold_mode: false,
             weight_threshold: 0.0,
             tag_filter: all_tags_filter(),
@@ -70,6 +76,8 @@ struct PlotPayload {
     manual_limits: Option<[f64; 4]>,
     x_axis_type: String,
     y_axis_type: String,
+    x_limits_fixed: bool,
+    y_limits_fixed: bool,
     axis_view_revision: u64,
     threshold_mode: bool,
     weight_threshold: f64,
@@ -275,6 +283,8 @@ pub fn ScatterPlot(
     );
     let x_axis_type = RwSignal::new(initial_axis_state.x_axis_type);
     let y_axis_type = RwSignal::new(initial_axis_state.y_axis_type);
+    let x_limits_fixed = RwSignal::new(initial_axis_state.x_limits_fixed);
+    let y_limits_fixed = RwSignal::new(initial_axis_state.y_limits_fixed);
     let axis_view_revision = RwSignal::new(0_u64);
     let threshold_mode = RwSignal::new(initial_axis_state.threshold_mode);
     let weight_threshold = RwSignal::new(initial_axis_state.weight_threshold.clamp(0.0, 1.0));
@@ -298,6 +308,8 @@ pub fn ScatterPlot(
             manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
             x_axis_type: x_axis_type.get(),
             y_axis_type: y_axis_type.get(),
+            x_limits_fixed: x_limits_fixed.get(),
+            y_limits_fixed: y_limits_fixed.get(),
             threshold_mode: threshold_mode.get(),
             weight_threshold: weight_threshold.get(),
             tag_filter: tag_filter.get(),
@@ -413,6 +425,8 @@ pub fn ScatterPlot(
             manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
             x_axis_type: x_axis_type.get(),
             y_axis_type: y_axis_type.get(),
+            x_limits_fixed: x_limits_fixed.get(),
+            y_limits_fixed: y_limits_fixed.get(),
             axis_view_revision: axis_view_revision.get(),
             threshold_mode: threshold_mode.get(),
             weight_threshold: weight_threshold.get(),
@@ -781,6 +795,24 @@ pub fn ScatterPlot(
                             <div class="axis-limit-actions">
                                 <button on:click=apply_axis_limits>"Apply"</button>
                                 <button on:click=reset_axis_limits>"Reset"</button>
+                            </div>
+                            <div class="axis-lock-options">
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        prop:checked=move || x_limits_fixed.get()
+                                        on:change=move |ev| x_limits_fixed.set(event_target_checked(&ev))
+                                    />
+                                    "Fix X limits"
+                                </label>
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        prop:checked=move || y_limits_fixed.get()
+                                        on:change=move |ev| y_limits_fixed.set(event_target_checked(&ev))
+                                    />
+                                    "Fix Y limits"
+                                </label>
                             </div>
                             <p class="axis-error">{move || axis_error.get()}</p>
                         </div>
