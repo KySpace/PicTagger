@@ -35,6 +35,7 @@ export function renderPlotlyScatter(
   onSelect,
   onHover,
   onUnhover,
+  onMark,
 ) {
   if (!globalThis.Plotly) {
     element.innerHTML =
@@ -66,7 +67,38 @@ export function renderPlotlyScatter(
   element.__pictaggerOnSelect = onSelect;
   element.__pictaggerOnHover = onHover;
   element.__pictaggerOnUnhover = onUnhover;
+  element.__pictaggerOnMark = onMark;
+  element.__pictaggerMarkMode = Boolean(payload.mark_mode);
   element.__pictaggerPointCount = points.length;
+
+  const pointScreenPosition = (point, event) => {
+    const rect = element.getBoundingClientRect();
+    const xaxis = point?.xaxis;
+    const yaxis = point?.yaxis;
+    const dotX =
+      xaxis && typeof xaxis.l2p === "function"
+        ? rect.left + (xaxis._offset ?? 0) + xaxis.l2p(point.x)
+        : event?.clientX ?? 24;
+    const dotY =
+      yaxis && typeof yaxis.l2p === "function"
+        ? rect.top + (yaxis._offset ?? 0) + yaxis.l2p(point.y)
+        : event?.clientY ?? 24;
+    return [dotX, dotY];
+  };
+
+  const markPoint = (point, event) => {
+    const id = point?.customdata?.[0];
+    const pairIndex = point?.customdata?.[1] ?? 0;
+    if (!id) {
+      return;
+    }
+    const clientX = event?.clientX ?? 24;
+    const clientY = event?.clientY ?? 24;
+    const [dotX, dotY] = pointScreenPosition(point, event);
+    element.__pictaggerOnMark(
+      `${id}:${pairIndex}:${dotX}:${dotY}:${clientX}:${clientY}`,
+    );
+  };
 
   const trace = {
     type: "scatter",
@@ -130,6 +162,12 @@ export function renderPlotlyScatter(
     }
 
     element.on("plotly_click", (event) => {
+      const nativeEvent = event?.event;
+      if (element.__pictaggerMarkMode && nativeEvent?.button === 2) {
+        nativeEvent.preventDefault();
+        markPoint(event?.points?.[0], nativeEvent);
+        return;
+      }
       const id = event?.points?.[0]?.customdata?.[0];
       if (id) {
         element.__pictaggerOnSelect(id);
@@ -141,6 +179,7 @@ export function renderPlotlyScatter(
       const pointNumber = event?.points?.[0]?.pointNumber;
       const clientX = event?.event?.clientX ?? 24;
       const clientY = event?.event?.clientY ?? 24;
+      element.__pictaggerLastHoverPoint = event?.points?.[0];
       if (element.__pictaggerHoverClearTimer) {
         clearTimeout(element.__pictaggerHoverClearTimer);
         element.__pictaggerHoverClearTimer = undefined;
@@ -169,6 +208,7 @@ export function renderPlotlyScatter(
       element.__pictaggerHoverClearTimer = setTimeout(() => {
         element.__pictaggerHoverClearTimer = undefined;
         element.__pictaggerHoveredPointNumber = undefined;
+        element.__pictaggerLastHoverPoint = undefined;
         const sizes = Array.from(
           { length: element.__pictaggerPointCount ?? 0 },
           () => baseMarkerSize,
@@ -176,6 +216,15 @@ export function renderPlotlyScatter(
         globalThis.Plotly.restyle(element, { "marker.size": [sizes] }, [0]);
         element.__pictaggerOnUnhover();
       }, 90);
+    });
+    element.addEventListener("contextmenu", (event) => {
+      if (!element.__pictaggerMarkMode) {
+        return;
+      }
+      event.preventDefault();
+      if (element.__pictaggerLastHoverPoint) {
+        markPoint(element.__pictaggerLastHoverPoint, event);
+      }
     });
     element.__pictaggerPlotlyHandlers = true;
   });

@@ -3,6 +3,7 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 
@@ -21,6 +22,7 @@ extern "C" {
         on_select: &Function,
         on_hover: &Function,
         on_unhover: &Function,
+        on_mark: &Function,
     );
 }
 
@@ -70,6 +72,7 @@ struct PlotPayload {
     axis_view_revision: u64,
     threshold_mode: bool,
     weight_threshold: f64,
+    mark_mode: bool,
 }
 
 #[derive(Clone, PartialEq, Serialize)]
@@ -83,6 +86,24 @@ struct PlotPoint {
     source_tag: String,
     tags: String,
     color: String,
+}
+
+#[derive(Clone, PartialEq)]
+struct MarkedPreview {
+    id: Uuid,
+    pair_index: usize,
+    dot_x: f64,
+    dot_y: f64,
+    left: f64,
+    top: f64,
+}
+
+#[derive(Clone, PartialEq)]
+struct DraggingMarkedPreview {
+    id: Uuid,
+    pair_index: usize,
+    offset_x: f64,
+    offset_y: f64,
 }
 
 fn linear_axis() -> String {
@@ -249,6 +270,9 @@ pub fn ScatterPlot(
     let threshold_mode = RwSignal::new(initial_axis_state.threshold_mode);
     let weight_threshold = RwSignal::new(initial_axis_state.weight_threshold.clamp(0.0, 1.0));
     let tag_filter = RwSignal::new(initial_axis_state.tag_filter);
+    let mark_mode = RwSignal::new(false);
+    let marked_previews = RwSignal::new(Vec::<MarkedPreview>::new());
+    let dragging_mark = RwSignal::new(None::<DraggingMarkedPreview>);
     let axis_error = RwSignal::new(String::new());
     let plot_ref = NodeRef::<leptos::html::Div>::new();
     let hovered_pair = RwSignal::new(None::<(Uuid, usize)>);
@@ -383,6 +407,7 @@ pub fn ScatterPlot(
             axis_view_revision: axis_view_revision.get(),
             threshold_mode: threshold_mode.get(),
             weight_threshold: weight_threshold.get(),
+            mark_mode: mark_mode.get(),
         };
         let Ok(payload_json) = serde_json::to_string(&payload) else {
             return;
@@ -445,6 +470,53 @@ pub fn ScatterPlot(
                 hovered_pair.set(None);
             }
         }) as Box<dyn Fn()>);
+        let mark_callback = Closure::wrap(Box::new(move |raw_key: String| {
+            let mut parts = raw_key.split(':');
+            let raw_id = parts.next().unwrap_or_default();
+            let raw_pair_index = parts.next().unwrap_or("0");
+            let dot_x = parts
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .unwrap_or(24.0);
+            let dot_y = parts
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .unwrap_or(24.0);
+            let client_x = parts
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .unwrap_or(dot_x);
+            let client_y = parts
+                .next()
+                .and_then(|raw| raw.parse::<f64>().ok())
+                .unwrap_or(dot_y);
+            let Ok(id) = Uuid::parse_str(raw_id) else {
+                return;
+            };
+            let pair_index = raw_pair_index.parse::<usize>().unwrap_or_default();
+            let (left, top) = position_hover_card(client_x, client_y);
+
+            marked_previews.update(|marks| {
+                if let Some(mark) = marks
+                    .iter_mut()
+                    .find(|mark| mark.id == id && mark.pair_index == pair_index)
+                {
+                    mark.dot_x = dot_x;
+                    mark.dot_y = dot_y;
+                    mark.left = left;
+                    mark.top = top;
+                } else {
+                    marks.push(MarkedPreview {
+                        id,
+                        pair_index,
+                        dot_x,
+                        dot_y,
+                        left,
+                        top,
+                    });
+                }
+            });
+        }) as Box<dyn Fn(String)>);
 
         render_plotly_scatter(
             element.as_ref(),
@@ -452,11 +524,13 @@ pub fn ScatterPlot(
             select_callback.as_ref().unchecked_ref(),
             hover_callback.as_ref().unchecked_ref(),
             unhover_callback.as_ref().unchecked_ref(),
+            mark_callback.as_ref().unchecked_ref(),
         );
 
         select_callback.forget();
         hover_callback.forget();
         unhover_callback.forget();
+        mark_callback.forget();
     });
 
     let apply_axis_limits = move |_| {
@@ -583,6 +657,16 @@ pub fn ScatterPlot(
                             }
                         />
                     </label>
+                    <label class="threshold-toggle">
+                        "Mark"
+                        <input
+                            type="checkbox"
+                            prop:checked=move || mark_mode.get()
+                            on:change=move |ev| {
+                                mark_mode.set(event_target_checked(&ev));
+                            }
+                        />
+                    </label>
                     <label class="threshold-slider">
                         <span>{move || format!("Weight >= {:.2}", weight_threshold.get())}</span>
                         <input
@@ -668,6 +752,149 @@ pub fn ScatterPlot(
             <div class="scatter-wrap">
                 <div node_ref=plot_ref class="plotly-scatter"></div>
             </div>
+            {move || {
+                let marks = marked_previews.get();
+                if marks.is_empty() {
+                    ().into_any()
+                } else {
+                    view! {
+                        <svg class="marked-preview-lines" aria-hidden="true">
+                            {marks
+                                .into_iter()
+                                .map(|mark| {
+                                    let x2 = mark.left + 180.0;
+                                    let y2 = mark.top + 86.0;
+                                    view! {
+                                        <line
+                                            x1=mark.dot_x.to_string()
+                                            y1=mark.dot_y.to_string()
+                                            x2=x2.to_string()
+                                            y2=y2.to_string()
+                                        />
+                                    }
+                                })
+                                .collect_view()}
+                        </svg>
+                    }
+                        .into_any()
+                }
+            }}
+            {move || {
+                let all_images = images.get();
+                marked_previews
+                    .get()
+                    .into_iter()
+                    .filter_map(|mark| {
+                        let item = all_images.iter().find(|item| item.id == mark.id)?.clone();
+                        let pair = item.freq_weight_pairs.get(mark.pair_index)?;
+                        let frequency = pair.frequency;
+                        let weight = pair.weight;
+                        Some((mark, item, frequency, weight))
+                    })
+                    .map(|(mark, item, frequency, weight)| {
+                        let id = mark.id;
+                        let pair_index = mark.pair_index;
+                        let tag_disk_style = tag_disk_style(&item.tags, &tag_color_map.get());
+                        view! {
+                            <div
+                                class="plotly-hover-preview marked-preview-card"
+                                style=format!("left:{}px; top:{}px;", mark.left, mark.top)
+                                on:pointermove=move |ev| {
+                                    if let Some(dragging) = dragging_mark.get() {
+                                        if dragging.id == id && dragging.pair_index == pair_index {
+                                            let next_left = ev.client_x() as f64 - dragging.offset_x;
+                                            let next_top = ev.client_y() as f64 - dragging.offset_y;
+                                            marked_previews.update(|marks| {
+                                                if let Some(mark) = marks
+                                                    .iter_mut()
+                                                    .find(|mark| mark.id == id && mark.pair_index == pair_index)
+                                                {
+                                                    mark.left = next_left;
+                                                    mark.top = next_top;
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                                on:pointerup=move |_| {
+                                    if dragging_mark
+                                        .get_untracked()
+                                        .is_some_and(|dragging| dragging.id == id && dragging.pair_index == pair_index)
+                                    {
+                                        dragging_mark.set(None);
+                                    }
+                                }
+                                on:pointercancel=move |_| {
+                                    if dragging_mark
+                                        .get_untracked()
+                                        .is_some_and(|dragging| dragging.id == id && dragging.pair_index == pair_index)
+                                    {
+                                        dragging_mark.set(None);
+                                    }
+                                }
+                            >
+                                <img src=item.image_data alt="marked preview" />
+                                <div class="plotly-hover-meta">
+                                    <div
+                                        class="marked-preview-header"
+                                        on:pointerdown=move |ev| {
+                                            ev.prevent_default();
+                                            if let Some(element) = ev
+                                                .current_target()
+                                                .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+                                            {
+                                                let _ = element.set_pointer_capture(ev.pointer_id());
+                                            }
+                                            dragging_mark.set(Some(DraggingMarkedPreview {
+                                                id,
+                                                pair_index,
+                                                offset_x: ev.client_x() as f64 - mark.left,
+                                                offset_y: ev.client_y() as f64 - mark.top,
+                                            }));
+                                        }
+                                    >
+                                        <p class="preview-source">{item.source.clone()}</p>
+                                        <button
+                                            class="marked-preview-close"
+                                            title="Close marked preview"
+                                            on:pointerdown=move |ev| ev.stop_propagation()
+                                            on:click=move |_| {
+                                                marked_previews.update(|marks| {
+                                                    marks.retain(|mark| !(mark.id == id && mark.pair_index == pair_index));
+                                                });
+                                            }
+                                        >
+                                            "X"
+                                        </button>
+                                    </div>
+                                    <p>{format!("source_tag: {}", item.source_tag)}</p>
+                                    <p class="preview-tag-line">
+                                        <span class="tag-disk" style=tag_disk_style></span>
+                                        <span>{format!("tags: {}", tags_label(&item.tags))}</span>
+                                    </p>
+                                    <p>{format!("pair {}: IB {:.3}", pair_index + 1, item.ib)}</p>
+                                    <p>{format!(
+                                        "frequency: {}",
+                                        frequency
+                                            .map(|v| format!("{v:.6}"))
+                                            .unwrap_or_else(|| "inactive".to_string())
+                                    )}</p>
+                                    <p>{format!(
+                                        "weight: {}",
+                                        weight
+                                            .map(|v| format!("{v:.6}"))
+                                            .unwrap_or_else(|| "none".to_string())
+                                    )}</p>
+                                    <div class="plotly-hover-actions">
+                                        <button on:click=move |_| on_jump.run(id)>"Jump To List"</button>
+                                        <button on:click=move |_| on_select.run(id)>"Open Details"</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    })
+                    .collect_view()
+            }}
             {move || {
                 hovered_preview
                     .get()
