@@ -67,6 +67,7 @@ struct PlotPayload {
     manual_limits: Option<[f64; 4]>,
     x_axis_type: String,
     y_axis_type: String,
+    axis_view_revision: u64,
     threshold_mode: bool,
     weight_threshold: f64,
 }
@@ -244,6 +245,7 @@ pub fn ScatterPlot(
     );
     let x_axis_type = RwSignal::new(initial_axis_state.x_axis_type);
     let y_axis_type = RwSignal::new(initial_axis_state.y_axis_type);
+    let axis_view_revision = RwSignal::new(0_u64);
     let threshold_mode = RwSignal::new(initial_axis_state.threshold_mode);
     let weight_threshold = RwSignal::new(initial_axis_state.weight_threshold.clamp(0.0, 1.0));
     let tag_filter = RwSignal::new(initial_axis_state.tag_filter);
@@ -378,6 +380,7 @@ pub fn ScatterPlot(
             manual_limits: manual_limits.get().map(|(x0, x1, y0, y1)| [x0, x1, y0, y1]),
             x_axis_type: x_axis_type.get(),
             y_axis_type: y_axis_type.get(),
+            axis_view_revision: axis_view_revision.get(),
             threshold_mode: threshold_mode.get(),
             weight_threshold: weight_threshold.get(),
         };
@@ -488,6 +491,7 @@ pub fn ScatterPlot(
         match (x_min, x_max, y_min, y_max) {
             (Some(x0), Some(x1), Some(y0), Some(y1)) if x0 < x1 && y0 < y1 => {
                 manual_limits.set(Some((x0, x1, y0, y1)));
+                axis_view_revision.update(|revision| *revision = revision.wrapping_add(1));
                 axis_error.set(format!(
                     "Applied: x[{:.3}, {:.3}], y[{:.3}, {:.3}]",
                     x0, x1, y0, y1
@@ -502,6 +506,7 @@ pub fn ScatterPlot(
 
     let reset_axis_limits = move |_| {
         manual_limits.set(None);
+        axis_view_revision.update(|revision| *revision = revision.wrapping_add(1));
         axis_error.set("Using auto limits.".to_string());
         x_min_input.set(String::new());
         x_max_input.set(String::new());
@@ -518,7 +523,13 @@ pub fn ScatterPlot(
                         "X Scale"
                         <select
                             prop:value=move || x_axis_type.get()
-                            on:change=move |ev| x_axis_type.set(event_target_value(&ev))
+                            on:change=move |ev| {
+                                let value = event_target_value(&ev);
+                                if x_axis_type.get_untracked() != value {
+                                    x_axis_type.set(value);
+                                    axis_view_revision.update(|revision| *revision = revision.wrapping_add(1));
+                                }
+                            }
                         >
                             <option value="linear">"Linear"</option>
                             <option value="log">"Log"</option>
@@ -528,7 +539,13 @@ pub fn ScatterPlot(
                         "Y Scale"
                         <select
                             prop:value=move || y_axis_type.get()
-                            on:change=move |ev| y_axis_type.set(event_target_value(&ev))
+                            on:change=move |ev| {
+                                let value = event_target_value(&ev);
+                                if y_axis_type.get_untracked() != value {
+                                    y_axis_type.set(value);
+                                    axis_view_revision.update(|revision| *revision = revision.wrapping_add(1));
+                                }
+                            }
                         >
                             <option value="linear">"Linear"</option>
                             <option value="log">"Log"</option>

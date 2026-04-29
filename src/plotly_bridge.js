@@ -90,6 +90,7 @@ export function renderPlotlyScatter(
 
   const layout = {
     autosize: true,
+    uirevision: `scatter-axis-${payload.axis_view_revision ?? 0}`,
     margin: { l: 58, r: 18, t: 12, b: 48 },
     dragmode: "pan",
     hovermode: "closest",
