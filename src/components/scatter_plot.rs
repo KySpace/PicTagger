@@ -526,8 +526,6 @@ pub fn ScatterPlot(
                 {
                     mark.dot_x = dot_x;
                     mark.dot_y = dot_y;
-                    mark.left = left;
-                    mark.top = top;
                 } else {
                     marks.push(MarkedPreview {
                         id,

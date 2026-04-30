@@ -101,6 +101,37 @@ export function renderPlotlyScatter(
     return [dotX, dotY];
   };
 
+  const pointLikeFromDataPoint = (point) => ({
+    x: point.ib,
+    y: point.frequency,
+    customdata: [point.id, point.pair_index],
+  });
+
+  const nearestPointForEvent = (event, maxDistance = 24) => {
+    const xaxis = element._fullLayout?.xaxis;
+    const yaxis = element._fullLayout?.yaxis;
+    if (!xaxis || !yaxis) {
+      return undefined;
+    }
+    let nearest;
+    let nearestDistance = maxDistance;
+    for (const point of element.__pictaggerPoints ?? []) {
+      const [dotX, dotY] = pointScreenPosition(pointLikeFromDataPoint(point), event);
+      if (!Number.isFinite(dotX) || !Number.isFinite(dotY)) {
+        continue;
+      }
+      const distance = Math.hypot(
+        dotX - (event?.clientX ?? 0),
+        dotY - (event?.clientY ?? 0),
+      );
+      if (distance <= nearestDistance) {
+        nearestDistance = distance;
+        nearest = point;
+      }
+    }
+    return nearest ? pointLikeFromDataPoint(nearest) : undefined;
+  };
+
   const markPoint = (point, event) => {
     const id = point?.customdata?.[0];
     const pairIndex = point?.customdata?.[1] ?? 0;
@@ -113,6 +144,12 @@ export function renderPlotlyScatter(
     element.__pictaggerOnMark(
       `${id}:${pairIndex}:${dotX}:${dotY}:${clientX}:${clientY}`,
     );
+  };
+
+  const clearHoverPointState = () => {
+    element.__pictaggerLastHoverPoint = undefined;
+    element.__pictaggerLastHoverAt = undefined;
+    element.__pictaggerLastHoverScreenPosition = undefined;
   };
 
   const updateMarkedPointPositions = () => {
@@ -157,6 +194,19 @@ export function renderPlotlyScatter(
       updateMarkedPointPositions();
     });
   };
+  const scheduleSettledMarkedPointPositionUpdate = () => {
+    element.__pictaggerScheduleMarkedPointPositionUpdate?.();
+    setTimeout(() => {
+      element.__pictaggerScheduleMarkedPointPositionUpdate?.();
+    }, 40);
+    setTimeout(() => {
+      element.__pictaggerScheduleMarkedPointPositionUpdate?.();
+    }, 120);
+  };
+  element.__pictaggerScheduleMarkedPointPositionUpdate =
+    scheduleMarkedPointPositionUpdate;
+  element.__pictaggerScheduleSettledMarkedPointPositionUpdate =
+    scheduleSettledMarkedPointPositionUpdate;
 
   const trace = {
     type: "scatter",
@@ -217,7 +267,7 @@ export function renderPlotlyScatter(
   };
 
   globalThis.Plotly.react(element, [trace], layout, config).then(() => {
-    scheduleMarkedPointPositionUpdate();
+    element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
 
     if (element.__pictaggerPlotlyHandlers || typeof element.on !== "function") {
       return;
@@ -241,7 +291,13 @@ export function renderPlotlyScatter(
       const pointNumber = event?.points?.[0]?.pointNumber;
       const clientX = event?.event?.clientX ?? 24;
       const clientY = event?.event?.clientY ?? 24;
-      element.__pictaggerLastHoverPoint = event?.points?.[0];
+      const point = event?.points?.[0];
+      element.__pictaggerLastHoverPoint = point;
+      element.__pictaggerLastHoverAt = Date.now();
+      element.__pictaggerLastHoverScreenPosition = pointScreenPosition(
+        point,
+        event?.event,
+      );
       if (element.__pictaggerHoverClearTimer) {
         clearTimeout(element.__pictaggerHoverClearTimer);
         element.__pictaggerHoverClearTimer = undefined;
@@ -270,7 +326,7 @@ export function renderPlotlyScatter(
       element.__pictaggerHoverClearTimer = setTimeout(() => {
         element.__pictaggerHoverClearTimer = undefined;
         element.__pictaggerHoveredPointNumber = undefined;
-        element.__pictaggerLastHoverPoint = undefined;
+        clearHoverPointState();
         const sizes = Array.from(
           { length: element.__pictaggerPointCount ?? 0 },
           () => baseMarkerSize,
@@ -280,26 +336,81 @@ export function renderPlotlyScatter(
       }, 90);
     });
     element.on("plotly_relayout", () => {
-      scheduleMarkedPointPositionUpdate();
+      clearHoverPointState();
+      element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
+    });
+    element.on("plotly_relayouting", () => {
+      element.__pictaggerScheduleMarkedPointPositionUpdate?.();
     });
     element.on("plotly_afterplot", () => {
-      scheduleMarkedPointPositionUpdate();
+      element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
     });
     element.addEventListener("contextmenu", (event) => {
       if (!element.__pictaggerMarkMode) {
         return;
       }
-      event.preventDefault();
-      if (element.__pictaggerLastHoverPoint) {
-        markPoint(element.__pictaggerLastHoverPoint, event);
+      const point = nearestPointForEvent(event, 26);
+      if (point) {
+        event.preventDefault();
+        markPoint(point, event);
       }
+    });
+    element.addEventListener(
+      "pointermove",
+      (event) => {
+        if (!element.__pictaggerMarkMode) {
+          return;
+        }
+        const point = nearestPointForEvent(event, 18);
+        if (!point) {
+          return;
+        }
+        const id = point.customdata?.[0];
+        const pairIndex = point.customdata?.[1] ?? 0;
+        if (!id) {
+          return;
+        }
+        element.__pictaggerLastHoverPoint = point;
+        element.__pictaggerLastHoverAt = Date.now();
+        element.__pictaggerLastHoverScreenPosition = pointScreenPosition(
+          point,
+          event,
+        );
+        element.__pictaggerOnHover(
+          `${id}:${pairIndex}:${event.clientX ?? 24}:${event.clientY ?? 24}`,
+        );
+      },
+      { passive: true },
+    );
+    element.addEventListener("pointerleave", () => {
+      clearHoverPointState();
     });
     if (globalThis.ResizeObserver) {
       element.__pictaggerResizeObserver = new ResizeObserver(() => {
-        scheduleMarkedPointPositionUpdate();
+        element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
       });
       element.__pictaggerResizeObserver.observe(element);
     }
+    globalThis.addEventListener(
+      "scroll",
+      () => {
+        element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
+      },
+      { passive: true },
+    );
+    globalThis.addEventListener("resize", () => {
+      element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
+    });
+    globalThis.visualViewport?.addEventListener(
+      "scroll",
+      () => {
+        element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
+      },
+      { passive: true },
+    );
+    globalThis.visualViewport?.addEventListener("resize", () => {
+      element.__pictaggerScheduleSettledMarkedPointPositionUpdate?.();
+    });
     element.__pictaggerPlotlyHandlers = true;
   });
 }
