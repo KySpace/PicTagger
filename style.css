@@ -51,6 +51,12 @@ body {
   gap: 0.6rem;
 }
 
+.import-message {
+  margin: 0.6rem 0 0;
+  color: #4e5655;
+  font-size: 0.86rem;
+}
+
 button,
 .button-like {
   border: 1px solid var(--line);

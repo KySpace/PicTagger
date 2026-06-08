@@ -144,6 +144,7 @@ pub fn App() -> impl IntoView {
     let batch_source_tag = RwSignal::new(String::new());
     let batch_ib = RwSignal::new(String::new());
     let active_top_tab = RwSignal::new("scatter".to_string());
+    let import_message = RwSignal::new(None::<String>);
 
     let save_records_timer = Rc::new(Cell::new(None::<i32>));
     Effect::new(move |_| {
@@ -251,28 +252,36 @@ pub fn App() -> impl IntoView {
         let tags = tags;
         let selected_id = selected_id;
         let hover_id = hover_id;
+        let import_message = import_message;
         spawn_local(async move {
             let imported = if file_name.to_ascii_lowercase().ends_with(".zip") {
-                read_as_bytes(&cache_file)
-                    .await
-                    .ok()
-                    .and_then(|bytes| import_cache_zip(&bytes).ok())
+                match read_as_bytes(&cache_file).await {
+                    Ok(bytes) => import_cache_zip(&bytes),
+                    Err(err) => Err(format!("Could not read ZIP cache: {err:?}")),
+                }
             } else {
-                read_as_text(&cache_file)
-                    .await
-                    .ok()
-                    .and_then(|raw| import_cache_yaml(&raw).ok())
+                match read_as_text(&cache_file).await {
+                    Ok(raw) => import_cache_yaml(&raw).map_err(|err| err.to_string()),
+                    Err(err) => Err(format!("Could not read YAML cache: {err:?}")),
+                }
             };
 
-            if let Some((imported_images, imported_tags)) = imported {
-                images.set(imported_images);
-                tags.set(if imported_tags.is_empty() {
-                    default_tag_definitions()
-                } else {
-                    imported_tags
-                });
-                selected_id.set(None);
-                hover_id.set(None);
+            match imported {
+                Ok((imported_images, imported_tags)) => {
+                    let image_count = imported_images.len();
+                    images.set(imported_images);
+                    tags.set(if imported_tags.is_empty() {
+                        default_tag_definitions()
+                    } else {
+                        imported_tags
+                    });
+                    selected_id.set(None);
+                    hover_id.set(None);
+                    import_message.set(Some(format!("Imported {image_count} cache images.")));
+                }
+                Err(err) => {
+                    import_message.set(Some(format!("Import failed: {err}")));
+                }
             }
         });
         input.set_value("");
@@ -493,6 +502,11 @@ pub fn App() -> impl IntoView {
                     </label>
                 </div>
             </header>
+            {move || {
+                import_message
+                    .get()
+                    .map(|message| view! { <p class="import-message">{message}</p> })
+            }}
 
             <IbFilterBar
                 filter_ib_min=filter_ib_min

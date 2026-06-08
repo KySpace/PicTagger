@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::{Cursor, Read, Write};
 
 use base64::Engine;
@@ -8,7 +9,7 @@ use zip::write::SimpleFileOptions;
 
 use crate::models::{
     FrequencyWeightPair, ImageRecord, TagDefinition, default_frequency_weight_pairs,
-    default_image_tags, default_tag_definitions, normalize_image_tags,
+    default_image_tags, default_tag_definitions, normalize_image_tags, now_millis,
 };
 
 const STORAGE_KEY: &str = "pictagger.gallery.v1";
@@ -23,7 +24,8 @@ pub struct CacheExport {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CacheImageRecord {
-    pub id: Uuid,
+    #[serde(default)]
+    pub id: Option<Uuid>,
     pub image_path: String,
     pub ib: f64,
     pub source: String,
@@ -33,9 +35,12 @@ pub struct CacheImageRecord {
     #[serde(default, skip_serializing)]
     pub tag: String,
     pub index: i32,
+    #[serde(default = "default_frequency_weight_pairs")]
     pub freq_weight_pairs: Vec<FrequencyWeightPair>,
-    pub created_at: i64,
-    pub updated_at: i64,
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    #[serde(default)]
+    pub updated_at: Option<i64>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -96,30 +101,58 @@ fn stored_record_into_image(record: StoredImageRecord) -> ImageRecord {
 
 impl CacheExport {
     pub fn into_state(self) -> (Vec<ImageRecord>, Vec<TagDefinition>) {
+        let mut seen_ids = HashSet::new();
         let images = self
             .images
             .into_iter()
-            .map(|record| ImageRecord {
-                id: record.id,
-                image_data: record.image_path.clone(),
-                image_path: record.image_path,
-                ib: record.ib,
-                source: record.source,
-                source_tag: record.source_tag,
-                tags: current_or_legacy_tags(record.tags, record.tag),
-                index: record.index,
-                freq_weight_pairs: if record.freq_weight_pairs.is_empty() {
-                    default_frequency_weight_pairs()
-                } else {
-                    record.freq_weight_pairs
-                },
-                frequency: 0.0,
-                weight: 0.0,
-                created_at: record.created_at,
-                updated_at: record.updated_at,
+            .map(|record| {
+                let image_data = record.image_path.clone();
+                cache_record_into_image(record, image_data, &mut seen_ids)
             })
             .collect();
         (images, self.tags)
+    }
+}
+
+fn normalized_import_id(record_id: Option<Uuid>, seen_ids: &mut HashSet<Uuid>) -> Uuid {
+    if let Some(id) = record_id {
+        if seen_ids.insert(id) {
+            return id;
+        }
+    }
+
+    loop {
+        let id = Uuid::new_v4();
+        if seen_ids.insert(id) {
+            return id;
+        }
+    }
+}
+
+fn cache_record_into_image(
+    record: CacheImageRecord,
+    image_data: String,
+    seen_ids: &mut HashSet<Uuid>,
+) -> ImageRecord {
+    let now = now_millis();
+    ImageRecord {
+        id: normalized_import_id(record.id, seen_ids),
+        image_data,
+        image_path: record.image_path,
+        ib: record.ib,
+        source: record.source,
+        source_tag: record.source_tag,
+        tags: current_or_legacy_tags(record.tags, record.tag),
+        index: record.index,
+        freq_weight_pairs: if record.freq_weight_pairs.is_empty() {
+            default_frequency_weight_pairs()
+        } else {
+            record.freq_weight_pairs
+        },
+        frequency: 0.0,
+        weight: 0.0,
+        created_at: record.created_at.unwrap_or(now),
+        updated_at: record.updated_at.unwrap_or(now),
     }
 }
 
@@ -242,7 +275,7 @@ pub fn export_cache_zip(images: &[ImageRecord], tags: &[TagDefinition]) -> Resul
 
     for (position, record) in images.iter().enumerate() {
         let mut cache_record = CacheImageRecord {
-            id: record.id,
+            id: Some(record.id),
             image_path: record.image_path.clone(),
             ib: record.ib,
             source: record.source.clone(),
@@ -251,8 +284,8 @@ pub fn export_cache_zip(images: &[ImageRecord], tags: &[TagDefinition]) -> Resul
             tag: String::new(),
             index: record.index,
             freq_weight_pairs: record.freq_weight_pairs.clone(),
-            created_at: record.created_at,
-            updated_at: record.updated_at,
+            created_at: Some(record.created_at),
+            updated_at: Some(record.updated_at),
         };
 
         if let Some((mime, bytes)) = decode_data_url(&record.image_data) {
@@ -298,6 +331,7 @@ pub fn import_cache_zip(bytes: &[u8]) -> Result<(Vec<ImageRecord>, Vec<TagDefini
     let cache = serde_yaml::from_str::<CacheExport>(&yaml).map_err(|err| err.to_string())?;
     let tags = cache.tags.clone();
     let mut images = Vec::new();
+    let mut seen_ids = HashSet::new();
 
     for record in cache.images {
         let image_data = if record.image_path.is_empty() {
@@ -311,25 +345,7 @@ pub fn import_cache_zip(bytes: &[u8]) -> Result<(Vec<ImageRecord>, Vec<TagDefini
             record.image_path.clone()
         };
 
-        images.push(ImageRecord {
-            id: record.id,
-            image_data,
-            image_path: record.image_path,
-            ib: record.ib,
-            source: record.source,
-            source_tag: record.source_tag,
-            tags: current_or_legacy_tags(record.tags, record.tag),
-            index: record.index,
-            freq_weight_pairs: if record.freq_weight_pairs.is_empty() {
-                default_frequency_weight_pairs()
-            } else {
-                record.freq_weight_pairs
-            },
-            frequency: 0.0,
-            weight: 0.0,
-            created_at: record.created_at,
-            updated_at: record.updated_at,
-        });
+        images.push(cache_record_into_image(record, image_data, &mut seen_ids));
     }
 
     Ok((images, tags))
