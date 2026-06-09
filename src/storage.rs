@@ -218,6 +218,36 @@ fn encode_data_url(mime: &str, bytes: &[u8]) -> String {
     format!("data:{mime};base64,{}", BASE64.encode(bytes))
 }
 
+fn find_cache_yaml_path<R: Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> Result<String, String> {
+    for i in 0..archive.len() {
+        let file = archive.by_index(i).map_err(|err| err.to_string())?;
+        let name = file.name().replace('\\', "/");
+        if name == "cache.yaml" || name.ends_with("/cache.yaml") {
+            return Ok(name);
+        }
+    }
+    Err("cache.yaml was not found in the ZIP archive.".to_string())
+}
+
+fn enclosing_zip_prefix(cache_yaml_path: &str) -> String {
+    cache_yaml_path
+        .rsplit_once('/')
+        .map(|(prefix, _)| format!("{prefix}/"))
+        .unwrap_or_default()
+}
+
+fn zip_image_path_candidates(image_path: &str, prefix: &str) -> Vec<String> {
+    let normalized = image_path.replace('\\', "/");
+    let trimmed = normalized.trim_start_matches('/').to_string();
+    let mut candidates = vec![trimmed.clone()];
+    if !prefix.is_empty() && !trimmed.starts_with(prefix) {
+        candidates.push(format!("{prefix}{trimmed}"));
+    }
+    candidates
+}
+
 pub fn load_records() -> Vec<ImageRecord> {
     let Some(storage) = web_storage() else {
         return Vec::new();
@@ -323,8 +353,10 @@ pub fn import_cache_zip(bytes: &[u8]) -> Result<(Vec<ImageRecord>, Vec<TagDefini
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|err| err.to_string())?;
     let mut yaml = String::new();
+    let cache_yaml_path = find_cache_yaml_path(&mut archive)?;
+    let zip_prefix = enclosing_zip_prefix(&cache_yaml_path);
     archive
-        .by_name("cache.yaml")
+        .by_name(&cache_yaml_path)
         .map_err(|err| err.to_string())?
         .read_to_string(&mut yaml)
         .map_err(|err| err.to_string())?;
@@ -336,13 +368,18 @@ pub fn import_cache_zip(bytes: &[u8]) -> Result<(Vec<ImageRecord>, Vec<TagDefini
     for record in cache.images {
         let image_data = if record.image_path.is_empty() {
             String::new()
-        } else if let Ok(mut file) = archive.by_name(&record.image_path) {
-            let mut image_bytes = Vec::new();
-            file.read_to_end(&mut image_bytes)
-                .map_err(|err| err.to_string())?;
-            encode_data_url(mime_from_path(&record.image_path), &image_bytes)
         } else {
-            record.image_path.clone()
+            let mut loaded = None;
+            for candidate in zip_image_path_candidates(&record.image_path, &zip_prefix) {
+                if let Ok(mut file) = archive.by_name(&candidate) {
+                    let mut image_bytes = Vec::new();
+                    file.read_to_end(&mut image_bytes)
+                        .map_err(|err| err.to_string())?;
+                    loaded = Some(encode_data_url(mime_from_path(&candidate), &image_bytes));
+                    break;
+                }
+            }
+            loaded.unwrap_or_else(|| record.image_path.clone())
         };
 
         images.push(cache_record_into_image(record, image_data, &mut seen_ids));
